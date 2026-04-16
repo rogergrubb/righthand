@@ -4,142 +4,195 @@ import SpriteText from "three-spritetext";
 import * as THREE from "three";
 
 /* ──────────────────────────────────────────────────────────────
-   RIGHTHAND 3D System Visualization — Jarno-grade v3
-   EVERY node gets a persistent floating label.
-   Tight clusters, lightning pulse animations, auto-rotation.
+   RIGHTHAND 3D System Visualization — Waterfall Hierarchy v4
+
+   Claude Opus sits at the apex. Everything cascades downward
+   through 5 tiers like a neural waterfall:
+
+     T0  ORCHESTRATOR    — Claude Opus 4 (the crown)
+     T1  BRAIN LAYER     — SDK, Router, Haiku, Tool Registry
+     T2  SERVICE LAYER   — Voice, Schedule, Integrations
+     T3  DATA LAYER      — Memory/RAG, Database + tables
+     T4  PRESENTATION    — Frontend, 3D Graph, WebSocket
+
+   Pulses ripple top-down. Every node labeled.
    ────────────────────────────────────────────────────────────── */
 
 type SysNode = {
-  id: string; label: string; kind: string; group: string; size: number;
+  id: string; label: string; kind: string; group: string; tier: number;
+  size: number; col: number;
   x?: number; y?: number; z?: number;
+  fx?: number; fy?: number; fz?: number;
   __pulse?: number; __pulseColor?: string;
+  __sphereMat?: THREE.MeshLambertMaterial;
+  __sprite?: any;
+  __ringMat?: THREE.MeshBasicMaterial;
+  __radius?: number;
 };
 type SysLink = { source: string; target: string; kind: string };
 
-const GROUPS: Record<string, { color: string; label: string; center: [number,number,number] }> = {
-  brain:        { color: "#9f7bff", label: "AI BRAIN",        center: [0, 40, 0] },
-  voice:        { color: "#4aa3ff", label: "VOICE ENGINE",    center: [-160, 80, 0] },
-  memory:       { color: "#7dd87d", label: "MEMORY + RAG",    center: [160, 40, 50] },
-  graph:        { color: "#ffb020", label: "3D GRAPH",        center: [0, -140, 0] },
-  schedule:     { color: "#ffd166", label: "SCHEDULED TASKS", center: [160, 140, -50] },
-  integrations: { color: "#ff5d8f", label: "INTEGRATIONS",    center: [-160, -100, 50] },
-  database:     { color: "#44ddbb", label: "DATABASE",        center: [120, -100, -70] },
-  frontend:     { color: "#88aaff", label: "FRONTEND",        center: [-80, -160, -50] },
+/* ── Tier colors (gradient from gold crown → cool blue base) ── */
+const TIER_META: Record<number, { color: string; label: string; y: number }> = {
+  0: { color: "#ffd700", label: "ORCHESTRATOR",  y: 200 },
+  1: { color: "#c49fff", label: "BRAIN LAYER",   y: 110 },
+  2: { color: "#4aa3ff", label: "SERVICE LAYER",  y: 10 },
+  3: { color: "#44ddbb", label: "DATA LAYER",     y: -100 },
+  4: { color: "#88aaff", label: "PRESENTATION",   y: -200 },
 };
 
 const KIND_COLOR: Record<string,string> = {
-  ai:"#c49fff", api:"#4aa3ff", service:"#88aaff", database:"#44ddbb",
-  table:"#66ccaa", data:"#7dd87d", task:"#ffd166", integration:"#ff5d8f",
+  ai: "#c49fff", api: "#4aa3ff", service: "#88aaff", database: "#44ddbb",
+  table: "#66ccaa", data: "#7dd87d", task: "#ffd166", integration: "#ff5d8f",
+  orchestrator: "#ffd700",
 };
 
+const GROUP_COLOR: Record<string,string> = {
+  brain: "#c49fff", voice: "#4aa3ff", memory: "#7dd87d", graph: "#ffb020",
+  schedule: "#ffd166", integrations: "#ff5d8f", database: "#44ddbb",
+  frontend: "#88aaff",
+};
+
+/* ── Horizontal spread per tier ── */
+const TIER_SPREAD = 45;  // x-spacing between nodes in same tier
+const Z_JITTER = 25;     // depth variation for 3D feel
+
 function buildTopology() {
-  const j = (c: number, r: number) => c + (Math.random() - 0.5) * r;
-  const mk = (id:string, label:string, kind:string, group:string, size:number): SysNode => {
-    const g = GROUPS[group];
+  // col = horizontal position index within the tier (centered at 0)
+  const mk = (id: string, label: string, kind: string, group: string, tier: number, size: number, col: number): SysNode => {
+    const tierY = TIER_META[tier]?.y ?? 0;
     return {
-      id, label, kind, group, size,
-      x: j(g.center[0], 40), y: j(g.center[1], 40), z: j(g.center[2], 40),
+      id, label, kind, group, tier, size, col,
+      x: col * TIER_SPREAD,
+      y: tierY + (Math.random() - 0.5) * 8,
+      z: (Math.random() - 0.5) * Z_JITTER,
     };
   };
 
   const nodes: SysNode[] = [
-    mk("brain-opus","Claude Opus 4","ai","brain",20),
-    mk("brain-haiku","Claude Haiku 4.5","ai","brain",11),
-    mk("brain-router","Agent Router","service","brain",13),
-    mk("brain-tools","Tool Registry","service","brain",9),
-    mk("brain-sdk","Agent SDK","service","brain",15),
-    mk("voice-rt","OpenAI Realtime","api","voice",17),
-    mk("voice-bridge","Voice Bridge","service","voice",11),
-    mk("voice-vad","Semantic VAD","service","voice",8),
-    mk("voice-tts","TTS Engine","service","voice",10),
-    mk("voice-asr","Speech Recog","service","voice",10),
-    mk("mem-pgv","pgvector","database","memory",15),
-    mk("mem-emb","Embeddings","service","memory",11),
-    mk("mem-chunks","Memory Chunks","data","memory",13),
-    mk("mem-recall","Semantic Recall","service","memory",9),
-    mk("db-pg","PostgreSQL","database","database",20),
-    mk("db-users","users","table","database",6),
-    mk("db-conv","conversations","table","database",10),
-    mk("db-lessons","lessons_learned","table","database",13),
-    mk("db-trends","trend_reports","table","database",11),
-    mk("db-gn","graph_nodes","table","database",8),
-    mk("db-ge","graph_edges","table","database",6),
-    mk("db-mc","memory_chunks","table","database",10),
-    mk("g3d","3D Force Graph","service","graph",15),
-    mk("g-scan","File Scanner","service","graph",11),
-    mk("g-watch","File Watcher","service","graph",9),
-    mk("g-ws","WebSocket Bus","service","graph",11),
-    mk("s-les","Lessons Daily","task","schedule",13),
-    mk("s-tre","Trends Daily","task","schedule",13),
-    mk("s-cron","APScheduler","service","schedule",9),
-    mk("i-gh","GitHub","integration","integrations",13),
-    mk("i-gm","Gmail","integration","integrations",11),
-    mk("i-sl","Slack","integration","integrations",11),
-    mk("i-st","Stripe","integration","integrations",11),
-    mk("i-li","Linear","integration","integrations",9),
-    mk("fe-react","React App","service","frontend",13),
-    mk("fe-vite","Vite","service","frontend",9),
-    mk("fe-vui","Voice Panel","service","frontend",11),
-    mk("fe-gui","Graph Renderer","service","frontend",11),
+    // ═══ TIER 0: THE CROWN ═══
+    mk("brain-opus", "Claude Opus 4", "orchestrator", "brain", 0, 28, 0),
+
+    // ═══ TIER 1: BRAIN LAYER ═══
+    mk("brain-sdk",    "Agent SDK",      "ai",      "brain", 1, 16, -1.5),
+    mk("brain-router", "Agent Router",   "service", "brain", 1, 14, -0.5),
+    mk("brain-haiku",  "Claude Haiku",   "ai",      "brain", 1, 12, 0.5),
+    mk("brain-tools",  "Tool Registry",  "service", "brain", 1, 10, 1.5),
+
+    // ═══ TIER 2: SERVICE LAYER ═══
+    // Voice cluster (left)
+    mk("voice-rt",     "OpenAI Realtime", "api",         "voice",        2, 17, -4),
+    mk("voice-bridge", "Voice Bridge",    "service",     "voice",        2, 12, -3),
+    mk("voice-vad",    "Semantic VAD",    "service",     "voice",        2, 9,  -5),
+    mk("voice-tts",    "TTS Engine",      "service",     "voice",        2, 10, -3.5),
+    mk("voice-asr",    "Speech Recog",    "service",     "voice",        2, 10, -4.5),
+    // Schedule cluster (center)
+    mk("s-cron",  "APScheduler",   "service", "schedule", 2, 10, -0.5),
+    mk("s-les",   "Lessons Daily", "task",    "schedule", 2, 13, 0.5),
+    mk("s-tre",   "Trends Daily",  "task",    "schedule", 2, 13, 1.5),
+    // Integrations cluster (right)
+    mk("i-gh", "GitHub",  "integration", "integrations", 2, 13, 3),
+    mk("i-gm", "Gmail",   "integration", "integrations", 2, 11, 4),
+    mk("i-sl", "Slack",   "integration", "integrations", 2, 11, 5),
+    mk("i-st", "Stripe",  "integration", "integrations", 2, 11, 3.5),
+    mk("i-li", "Linear",  "integration", "integrations", 2, 9,  4.5),
+
+    // ═══ TIER 3: DATA LAYER ═══
+    // Memory cluster (left)
+    mk("mem-pgv",    "pgvector",        "database", "memory",   3, 15, -3),
+    mk("mem-emb",    "Embeddings",      "service",  "memory",   3, 11, -2),
+    mk("mem-chunks", "Memory Chunks",   "data",     "memory",   3, 13, -4),
+    mk("mem-recall", "Semantic Recall",  "service",  "memory",   3, 10, -2.5),
+    // Database cluster (right)
+    mk("db-pg",      "PostgreSQL",      "database", "database", 3, 20, 1),
+    mk("db-users",   "users",           "table",    "database", 3, 6,  2.5),
+    mk("db-conv",    "conversations",   "table",    "database", 3, 10, 3.5),
+    mk("db-lessons", "lessons_learned", "table",    "database", 3, 13, 0),
+    mk("db-trends",  "trend_reports",   "table",    "database", 3, 11, 4.5),
+    mk("db-gn",      "graph_nodes",     "table",    "database", 3, 8,  2),
+    mk("db-ge",      "graph_edges",     "table",    "database", 3, 6,  3),
+    mk("db-mc",      "memory_chunks",   "table",    "database", 3, 10, -1),
+
+    // ═══ TIER 4: PRESENTATION ═══
+    mk("g3d",      "3D Force Graph",  "service", "graph",    4, 15, -2),
+    mk("g-scan",   "File Scanner",    "service", "graph",    4, 11, -1),
+    mk("g-watch",  "File Watcher",    "service", "graph",    4, 9,  -3),
+    mk("g-ws",     "WebSocket Bus",   "service", "graph",    4, 11, 0),
+    mk("fe-react", "React App",       "service", "frontend", 4, 13, 1.5),
+    mk("fe-vite",  "Vite",            "service", "frontend", 4, 9,  2.5),
+    mk("fe-vui",   "Voice Panel",     "service", "frontend", 4, 11, 3.5),
+    mk("fe-gui",   "Graph Renderer",  "service", "frontend", 4, 11, -0.5),
   ];
 
   const links: SysLink[] = [
-    {source:"brain-sdk",target:"brain-opus",kind:"uses"},
-    {source:"brain-sdk",target:"brain-haiku",kind:"uses"},
-    {source:"brain-router",target:"brain-sdk",kind:"routes"},
-    {source:"brain-tools",target:"brain-sdk",kind:"provides"},
-    {source:"voice-bridge",target:"brain-router",kind:"sends"},
-    {source:"voice-rt",target:"voice-bridge",kind:"streams"},
-    {source:"voice-vad",target:"voice-rt",kind:"detects"},
-    {source:"voice-tts",target:"voice-rt",kind:"speaks"},
-    {source:"voice-asr",target:"voice-rt",kind:"transcribes"},
-    {source:"brain-haiku",target:"mem-recall",kind:"queries"},
-    {source:"mem-recall",target:"mem-pgv",kind:"searches"},
-    {source:"mem-emb",target:"mem-chunks",kind:"indexes"},
-    {source:"mem-pgv",target:"db-mc",kind:"reads"},
-    {source:"db-pg",target:"db-users",kind:"has"},
-    {source:"db-pg",target:"db-conv",kind:"has"},
-    {source:"db-pg",target:"db-lessons",kind:"has"},
-    {source:"db-pg",target:"db-trends",kind:"has"},
-    {source:"db-pg",target:"db-gn",kind:"has"},
-    {source:"db-pg",target:"db-ge",kind:"has"},
-    {source:"db-pg",target:"db-mc",kind:"has"},
-    {source:"g3d",target:"g-ws",kind:"subscribes"},
-    {source:"g-scan",target:"g-ws",kind:"emits"},
-    {source:"g-watch",target:"g-scan",kind:"triggers"},
-    {source:"g-ws",target:"fe-gui",kind:"streams"},
-    {source:"s-les",target:"db-lessons",kind:"writes"},
-    {source:"s-tre",target:"db-trends",kind:"writes"},
-    {source:"s-cron",target:"s-les",kind:"triggers"},
-    {source:"s-cron",target:"s-tre",kind:"triggers"},
-    {source:"s-les",target:"brain-opus",kind:"calls"},
-    {source:"s-tre",target:"brain-opus",kind:"calls"},
-    {source:"fe-react",target:"fe-vite",kind:"built-by"},
-    {source:"fe-vui",target:"voice-bridge",kind:"connects"},
-    {source:"fe-gui",target:"g3d",kind:"renders"},
-    {source:"i-gh",target:"brain-tools",kind:"tool"},
-    {source:"i-gm",target:"brain-tools",kind:"tool"},
-    {source:"i-sl",target:"brain-tools",kind:"tool"},
-    {source:"i-st",target:"brain-tools",kind:"tool"},
-    {source:"i-li",target:"brain-tools",kind:"tool"},
-    {source:"brain-router",target:"db-conv",kind:"logs"},
-    {source:"mem-chunks",target:"db-pg",kind:"stores"},
+    // Crown → Brain
+    { source: "brain-opus", target: "brain-sdk",    kind: "powers" },
+    { source: "brain-opus", target: "brain-router",  kind: "powers" },
+    { source: "brain-opus", target: "brain-haiku",   kind: "delegates" },
+    { source: "brain-opus", target: "brain-tools",   kind: "powers" },
+    // Brain internal
+    { source: "brain-router", target: "brain-sdk",   kind: "routes" },
+    { source: "brain-tools",  target: "brain-sdk",   kind: "provides" },
+    // Brain → Service layer
+    { source: "brain-router", target: "voice-bridge", kind: "sends" },
+    { source: "brain-sdk",    target: "s-les",        kind: "calls" },
+    { source: "brain-sdk",    target: "s-tre",        kind: "calls" },
+    { source: "brain-tools",  target: "i-gh",         kind: "uses" },
+    { source: "brain-tools",  target: "i-gm",         kind: "uses" },
+    { source: "brain-tools",  target: "i-sl",         kind: "uses" },
+    { source: "brain-tools",  target: "i-st",         kind: "uses" },
+    { source: "brain-tools",  target: "i-li",         kind: "uses" },
+    // Voice internal
+    { source: "voice-rt",  target: "voice-bridge", kind: "streams" },
+    { source: "voice-vad", target: "voice-rt",     kind: "detects" },
+    { source: "voice-tts", target: "voice-rt",     kind: "speaks" },
+    { source: "voice-asr", target: "voice-rt",     kind: "transcribes" },
+    // Schedule internal
+    { source: "s-cron", target: "s-les", kind: "triggers" },
+    { source: "s-cron", target: "s-tre", kind: "triggers" },
+    // Service → Data
+    { source: "brain-haiku",  target: "mem-recall",  kind: "queries" },
+    { source: "mem-recall",   target: "mem-pgv",     kind: "searches" },
+    { source: "mem-emb",      target: "mem-chunks",  kind: "indexes" },
+    { source: "mem-pgv",      target: "db-mc",       kind: "reads" },
+    { source: "s-les",        target: "db-lessons",  kind: "writes" },
+    { source: "s-tre",        target: "db-trends",   kind: "writes" },
+    { source: "brain-router", target: "db-conv",     kind: "logs" },
+    { source: "mem-chunks",   target: "db-pg",       kind: "stores" },
+    // Database internal
+    { source: "db-pg", target: "db-users",   kind: "has" },
+    { source: "db-pg", target: "db-conv",    kind: "has" },
+    { source: "db-pg", target: "db-lessons", kind: "has" },
+    { source: "db-pg", target: "db-trends",  kind: "has" },
+    { source: "db-pg", target: "db-gn",      kind: "has" },
+    { source: "db-pg", target: "db-ge",      kind: "has" },
+    { source: "db-pg", target: "db-mc",      kind: "has" },
+    // Data → Presentation
+    { source: "g-ws",    target: "fe-gui",     kind: "streams" },
+    { source: "g3d",     target: "g-ws",       kind: "subscribes" },
+    { source: "g-scan",  target: "g-ws",       kind: "emits" },
+    { source: "g-watch", target: "g-scan",     kind: "triggers" },
+    { source: "fe-react", target: "fe-vite",   kind: "built-by" },
+    { source: "fe-vui",  target: "voice-bridge", kind: "connects" },
+    { source: "fe-gui",  target: "g3d",        kind: "renders" },
   ];
+
   return { nodes, links };
 }
 
 const WS_URL = (import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000") + "/ws/graph";
 
-/* ── Custom cluster-centering force ── */
-function forceCluster(nodes: SysNode[], strength = 0.15) {
+/* ── Hierarchy force: pins Y to tier, gently pulls X to column ── */
+function forceHierarchy(nodes: SysNode[], yStrength = 0.35, xStrength = 0.08) {
   return (alpha: number) => {
     for (const n of nodes) {
-      const g = GROUPS[n.group];
-      if (!g) continue;
-      const k = alpha * strength;
-      n.x = (n.x ?? 0) + (g.center[0] - (n.x ?? 0)) * k;
-      n.y = (n.y ?? 0) + (g.center[1] - (n.y ?? 0)) * k;
-      n.z = (n.z ?? 0) + (g.center[2] - (n.z ?? 0)) * k;
+      const tierY = TIER_META[n.tier]?.y ?? 0;
+      const targetX = n.col * TIER_SPREAD;
+      // Strong Y pinning (hierarchy)
+      n.y = (n.y ?? 0) + (tierY - (n.y ?? 0)) * alpha * yStrength;
+      // Gentle X guidance (layout)
+      n.x = (n.x ?? 0) + (targetX - (n.x ?? 0)) * alpha * xStrength;
+      // Very light Z centering
+      n.z = (n.z ?? 0) * (1 - alpha * 0.02);
     }
   };
 }
@@ -155,125 +208,157 @@ export function Graph3D() {
 
     try {
       const { nodes, links } = buildTopology();
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
       graph = ForceGraph3D()(el)
-        .backgroundColor("#05070d")
+        .backgroundColor("#060a12")
         .width(el.clientWidth)
         .height(el.clientHeight)
         .graphData({ nodes, links })
+        .dagMode(null) // we handle hierarchy ourselves
 
-        /* ── EVERY node: sphere + floating label ── */
+        /* ── Node: sphere + glow ring + label ── */
         .nodeThreeObject((node: any) => {
           const group = new THREE.Group();
+          const baseColor = node.id === "brain-opus"
+            ? "#ffd700"
+            : (KIND_COLOR[node.kind] ?? GROUP_COLOR[node.group] ?? "#88aaff");
+          const radius = node.id === "brain-opus"
+            ? Math.pow(node.size, 0.6) * 1.8
+            : Math.pow(node.size ?? 8, 0.6) * 1.1;
 
-          // Glowing sphere
-          const color = node.__pulse && Date.now() - node.__pulse < 1500
-            ? "#ffffff"
-            : (KIND_COLOR[node.kind] ?? "#88aaff");
-          const radius = Math.pow(node.size ?? 8, 0.6) * 1.2;
-          const geo = new THREE.SphereGeometry(radius, 20, 20);
+          // Main sphere
+          const geo = new THREE.SphereGeometry(radius, 24, 24);
           const mat = new THREE.MeshLambertMaterial({
-            color,
+            color: baseColor,
             transparent: true,
-            opacity: 0.92,
-            emissive: color,
-            emissiveIntensity: 0.35,
+            opacity: 0.93,
+            emissive: baseColor,
+            emissiveIntensity: node.id === "brain-opus" ? 0.6 : 0.3,
           });
-          const sphere = new THREE.Mesh(geo, mat);
-          group.add(sphere);
+          group.add(new THREE.Mesh(geo, mat));
 
-          // Glow ring (outer halo)
-          const ringGeo = new THREE.RingGeometry(radius * 1.3, radius * 1.8, 32);
+          // Outer glow ring
+          const ringGeo = new THREE.RingGeometry(radius * 1.3, radius * 1.9, 32);
           const ringMat = new THREE.MeshBasicMaterial({
-            color,
+            color: baseColor,
             transparent: true,
-            opacity: 0.08,
+            opacity: node.id === "brain-opus" ? 0.15 : 0.06,
             side: THREE.DoubleSide,
           });
           const ring = new THREE.Mesh(ringGeo, ringMat);
-          ring.lookAt(0, 0, 1); // face camera-ish
+          ring.lookAt(0, 0, 1);
           group.add(ring);
 
-          // Text label
-          const sprite = new SpriteText(node.label, 3.5, color);
-          sprite.fontWeight = "600";
-          sprite.backgroundColor = "rgba(0,0,0,0.55)";
+          // Crown gets a second larger halo
+          if (node.id === "brain-opus") {
+            const halo2Geo = new THREE.RingGeometry(radius * 2.2, radius * 3.0, 48);
+            const halo2Mat = new THREE.MeshBasicMaterial({
+              color: "#ffd700",
+              transparent: true,
+              opacity: 0.06,
+              side: THREE.DoubleSide,
+            });
+            const halo2 = new THREE.Mesh(halo2Geo, halo2Mat);
+            halo2.lookAt(0, 0, 1);
+            group.add(halo2);
+          }
+
+          // Persistent text label
+          const fontSize = node.id === "brain-opus" ? 4.5 : 3.2;
+          const sprite = new SpriteText(node.label, fontSize, baseColor);
+          sprite.fontWeight = node.tier <= 1 ? "700" : "600";
+          sprite.backgroundColor = "rgba(0,0,0,0.6)";
           sprite.padding = 1.5;
           sprite.borderRadius = 2;
-          (sprite as any).position.set(0, -(radius + 5), 0);
+          (sprite as any).position.set(0, -(radius + 5.5), 0);
           group.add(sprite);
 
-          // Store refs for pulse updates
+          // Store refs for animation
           node.__sphereMat = mat;
           node.__sprite = sprite;
-          node.__ring = ring;
           node.__ringMat = ringMat;
           node.__radius = radius;
+          node.__baseColor = baseColor;
 
           return group;
         })
         .nodeThreeObjectExtend(false)
 
-        /* ── Link rendering ── */
+        /* ── Links ── */
         .linkColor((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
           const t: any = typeof l.target === "object" ? l.target : null;
-          const sPulse = s?.__pulse && Date.now() - s.__pulse < 1200;
-          const tPulse = t?.__pulse && Date.now() - t.__pulse < 1200;
-          if (sPulse || tPulse) return "#ffffff88";
-          return "rgba(100,150,240,0.18)";
+          const now = Date.now();
+          const active = (s?.__pulse && now - s.__pulse < 1400) ||
+                         (t?.__pulse && now - t.__pulse < 1400);
+          if (active) return "#ffffff99";
+          // Tier-based link color: higher tiers = warmer
+          const tier = Math.min(s?.tier ?? 4, t?.tier ?? 4);
+          return TIER_META[tier]
+            ? `${TIER_META[tier].color}22`
+            : "rgba(100,150,240,0.12)";
         })
         .linkWidth((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
           const t: any = typeof l.target === "object" ? l.target : null;
-          const active = (s?.__pulse && Date.now() - s.__pulse < 1200) ||
-                         (t?.__pulse && Date.now() - t.__pulse < 1200);
-          return active ? 2.8 : 0.5;
+          const now = Date.now();
+          const active = (s?.__pulse && now - s.__pulse < 1400) ||
+                         (t?.__pulse && now - t.__pulse < 1400);
+          // Crown links are thicker
+          const isCrown = s?.id === "brain-opus" || t?.id === "brain-opus";
+          return active ? 3.0 : (isCrown ? 0.8 : 0.45);
         })
         .linkDirectionalParticles((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
           const t: any = typeof l.target === "object" ? l.target : null;
-          const active = (s?.__pulse && Date.now() - s.__pulse < 2000) ||
-                         (t?.__pulse && Date.now() - t.__pulse < 2000);
+          const now = Date.now();
+          const active = (s?.__pulse && now - s.__pulse < 2200) ||
+                         (t?.__pulse && now - t.__pulse < 2200);
           return active ? 6 : 0;
         })
         .linkDirectionalParticleWidth(2.5)
-        .linkDirectionalParticleSpeed(0.02)
-        .linkDirectionalParticleColor(() => "#ffffff")
+        .linkDirectionalParticleSpeed(0.018)
+        .linkDirectionalParticleColor(() => "#ffffffcc")
+        .linkOpacity(0.6)
 
         /* ── Physics ── */
-        .d3AlphaDecay(0.012)
-        .d3VelocityDecay(0.4)
-        .warmupTicks(120)
-        .cooldownTime(5000);
+        .d3AlphaDecay(0.01)
+        .d3VelocityDecay(0.45)
+        .warmupTicks(160)
+        .cooldownTime(6000);
 
-      // Custom cluster force
-      graph.d3Force("cluster", forceCluster(nodes, 0.18));
-      graph.d3Force("charge")?.strength(-35);
+      // Hierarchy force (strong Y pinning to tiers)
+      graph.d3Force("hierarchy", forceHierarchy(nodes, 0.4, 0.1));
+      // Weak charge so nodes don't fly apart
+      graph.d3Force("charge")?.strength(-20);
+      // Short links within same tier, longer across tiers
       graph.d3Force("link")?.distance((l: any) => {
-        const s = typeof l.source === "object" ? l.source : nodes.find((n: any) => n.id === l.source);
-        const t = typeof l.target === "object" ? l.target : nodes.find((n: any) => n.id === l.target);
-        return (s?.group === t?.group) ? 25 : 80;
+        const s = typeof l.source === "object" ? l.source : nodeMap.get(l.source);
+        const t = typeof l.target === "object" ? l.target : nodeMap.get(l.target);
+        if (s?.tier === t?.tier) return 30;
+        return 60 + Math.abs((s?.tier ?? 0) - (t?.tier ?? 0)) * 15;
       });
 
-      // Camera
+      // Camera: start elevated looking down at the hierarchy
       setTimeout(() => graph.cameraPosition(
-        { x: 300, y: 220, z: 300 }, { x: 0, y: 0, z: 0 }, 2500
-      ), 200);
+        { x: 0, y: 350, z: 450 }, { x: 0, y: 0, z: 0 }, 3000
+      ), 300);
 
+      // Slow orbit — slightly elevated to show hierarchy
       let angle = 0;
       const rotateLoop = setInterval(() => {
         if (!graph) return;
-        angle += 0.0012;
-        const d = 400;
+        angle += 0.001;
+        const d = 480;
         graph.cameraPosition({
           x: d * Math.sin(angle),
-          y: 140 + 60 * Math.sin(angle * 0.35),
+          y: 200 + 50 * Math.sin(angle * 0.3),
           z: d * Math.cos(angle),
         });
       }, 50);
 
-      /* ── WebSocket ── */
+      /* ── WebSocket for live pulses ── */
       let ws: WebSocket | null = null;
       try {
         ws = new WebSocket(WS_URL);
@@ -289,10 +374,11 @@ export function Graph3D() {
               );
               if (tgt) {
                 tgt.__pulse = Date.now();
-                tgt.__pulseColor = GROUPS[tgt.group]?.color ?? "#ffffff";
+                tgt.__pulseColor = tgt.__baseColor ?? "#ffffff";
               }
-              const br = gd.nodes.find((n: any) => n.id === "brain-opus");
-              if (br) { br.__pulse = Date.now(); br.__pulseColor = "#c49fff"; }
+              // Always pulse the crown
+              const crown = gd.nodes.find((n: any) => n.id === "brain-opus");
+              if (crown) { crown.__pulse = Date.now(); crown.__pulseColor = "#ffd700"; }
             }
           } catch { }
         };
@@ -300,7 +386,7 @@ export function Graph3D() {
         ws.onclose = () => setStatus("disconnected");
       } catch { setStatus("offline"); }
 
-      /* ── Pulse animation refresh ── */
+      /* ── Pulse animation loop ── */
       const pulseLoop = setInterval(() => {
         if (!graph) return;
         const gd = graph.graphData();
@@ -308,37 +394,65 @@ export function Graph3D() {
         for (const n of gd.nodes) {
           if (!n.__sphereMat) continue;
           const isPulsing = n.__pulse && now - n.__pulse < 1500;
-          const baseColor = KIND_COLOR[n.kind] ?? "#88aaff";
-          const color = isPulsing && now - n.__pulse < 400 ? "#ffffff" : baseColor;
+          const base = n.__baseColor ?? "#88aaff";
+          const flash = isPulsing && now - n.__pulse < 350;
+          const color = flash ? "#ffffff" : base;
+
           n.__sphereMat.color.set(color);
           n.__sphereMat.emissive.set(color);
-          n.__sphereMat.emissiveIntensity = isPulsing ? 0.8 : 0.35;
-          n.__sphereMat.opacity = isPulsing ? 1.0 : 0.92;
+          n.__sphereMat.emissiveIntensity = isPulsing ? 0.9 : (n.id === "brain-opus" ? 0.6 : 0.3);
+          n.__sphereMat.opacity = isPulsing ? 1.0 : 0.93;
+
           if (n.__ringMat) {
             n.__ringMat.color.set(color);
-            n.__ringMat.opacity = isPulsing ? 0.25 : 0.08;
+            n.__ringMat.opacity = isPulsing ? 0.3 : (n.id === "brain-opus" ? 0.15 : 0.06);
           }
           if (n.__sprite) {
-            n.__sprite.color = isPulsing ? "#ffffff" : baseColor;
+            n.__sprite.color = flash ? "#ffffff" : base;
           }
         }
-        // Also refresh link visuals
         graph.linkColor(graph.linkColor());
         graph.linkWidth(graph.linkWidth());
         graph.linkDirectionalParticles(graph.linkDirectionalParticles());
-      }, 80);
+      }, 70);
 
-      /* ── Demo pulses ── */
+      /* ── Cascade demo pulses (top-down waterfall) ── */
       const demoLoop = setInterval(() => {
         const gd = graph.graphData();
         if (!gd.nodes.length) return;
-        const count = 2 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < count; i++) {
-          const n = gd.nodes[Math.floor(Math.random() * gd.nodes.length)];
-          n.__pulse = Date.now();
-          n.__pulseColor = GROUPS[n.group]?.color ?? "#fff";
+
+        // Start from the crown and cascade down
+        const crown = gd.nodes.find((n: any) => n.id === "brain-opus");
+        if (crown) { crown.__pulse = Date.now(); crown.__pulseColor = "#ffd700"; }
+
+        // Pick a random path downward through tiers
+        const tier1 = gd.nodes.filter((n: any) => n.tier === 1);
+        const t1pick = tier1[Math.floor(Math.random() * tier1.length)];
+        if (t1pick) {
+          setTimeout(() => { t1pick.__pulse = Date.now(); t1pick.__pulseColor = t1pick.__baseColor; }, 200);
         }
-      }, 2000);
+
+        const tier2 = gd.nodes.filter((n: any) => n.tier === 2);
+        const t2picks = [
+          tier2[Math.floor(Math.random() * tier2.length)],
+          tier2[Math.floor(Math.random() * tier2.length)],
+        ];
+        t2picks.forEach((n, i) => {
+          if (n) setTimeout(() => { n.__pulse = Date.now(); n.__pulseColor = n.__baseColor; }, 400 + i * 100);
+        });
+
+        const tier3 = gd.nodes.filter((n: any) => n.tier === 3);
+        const t3pick = tier3[Math.floor(Math.random() * tier3.length)];
+        if (t3pick) {
+          setTimeout(() => { t3pick.__pulse = Date.now(); t3pick.__pulseColor = t3pick.__baseColor; }, 700);
+        }
+
+        const tier4 = gd.nodes.filter((n: any) => n.tier === 4);
+        const t4pick = tier4[Math.floor(Math.random() * tier4.length)];
+        if (t4pick) {
+          setTimeout(() => { t4pick.__pulse = Date.now(); t4pick.__pulseColor = t4pick.__baseColor; }, 950);
+        }
+      }, 3000);
 
       setStatus("live");
 
@@ -362,26 +476,26 @@ export function Graph3D() {
 
   return (
     <div ref={mountRef} style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* ── Cluster legend (top-right) ── */}
+      {/* ── Tier legend (left side, vertical) ── */}
       <div style={{
-        position: "absolute", top: 12, right: 14, padding: "12px 16px",
+        position: "absolute", top: 60, left: 14, padding: "10px 14px",
         zIndex: 999, pointerEvents: "none",
-        background: "rgba(5,7,13,0.7)", borderRadius: 10,
+        background: "rgba(6,10,18,0.75)", borderRadius: 10,
         backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.06)",
       }}>
-        {Object.entries(GROUPS).map(([k, g]) => (
-          <div key={k} style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: 2.5,
-            color: g.color, opacity: 0.85, marginBottom: 7,
-            textTransform: "uppercase", textAlign: "right",
-            textShadow: `0 0 8px ${g.color}44`,
+        {Object.entries(TIER_META).map(([tier, meta]) => (
+          <div key={tier} style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: 2.5,
+            color: meta.color, opacity: 0.8, marginBottom: 10,
+            textTransform: "uppercase",
+            textShadow: `0 0 8px ${meta.color}44`,
           }}>
             <span style={{
-              display: "inline-block", width: 8, height: 8, borderRadius: "50%",
-              backgroundColor: g.color, marginRight: 8, verticalAlign: "middle",
-              boxShadow: `0 0 8px ${g.color}, 0 0 2px ${g.color}`,
+              display: "inline-block", width: 14, height: 2,
+              backgroundColor: meta.color, marginRight: 8, verticalAlign: "middle",
+              boxShadow: `0 0 6px ${meta.color}`,
             }} />
-            {g.label}
+            T{tier} · {meta.label}
           </div>
         ))}
       </div>
@@ -393,7 +507,7 @@ export function Graph3D() {
         fontSize: 11, fontWeight: 700, letterSpacing: 6,
         color: "rgba(255,255,255,0.5)", textTransform: "uppercase",
       }}>
-        RIGHTHAND · SYSTEM MAP
+        RIGHTHAND · SYSTEM HIERARCHY
       </div>
 
       {/* ── Status indicator ── */}
