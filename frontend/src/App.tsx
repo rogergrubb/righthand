@@ -9,7 +9,7 @@ export function App() {
       <VoicePanel />
       <div style={{
         position: "absolute", top: 16, left: 16, fontWeight: 600, letterSpacing: 4,
-        fontSize: 12, opacity: 0.7
+        fontSize: 12, opacity: 0.7, zIndex: 10
       }}>
         RIGHTHAND · v0.1
       </div>
