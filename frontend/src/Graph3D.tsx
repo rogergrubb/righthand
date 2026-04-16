@@ -31,13 +31,13 @@ type SysNode = {
 };
 type SysLink = { source: string; target: string; kind: string };
 
-/* ── Tier layout — much more vertical spread ── */
+/* ── Tier layout — centered around Y=0 so everything fits viewport ── */
 const TIER_META: Record<number, { color: string; label: string; y: number }> = {
-  0: { color: "#ffd700", label: "ORCHESTRATOR",  y: 280 },
-  1: { color: "#c49fff", label: "BRAIN LAYER",   y: 150 },
-  2: { color: "#4aa3ff", label: "SERVICE LAYER",  y: 0 },
-  3: { color: "#44ddbb", label: "DATA LAYER",     y: -160 },
-  4: { color: "#88aaff", label: "PRESENTATION",   y: -300 },
+  0: { color: "#ffd700", label: "ORCHESTRATOR",  y: 150 },
+  1: { color: "#c49fff", label: "BRAIN LAYER",   y: 70 },
+  2: { color: "#4aa3ff", label: "SERVICE LAYER",  y: -30 },
+  3: { color: "#44ddbb", label: "DATA LAYER",     y: -120 },
+  4: { color: "#88aaff", label: "PRESENTATION",   y: -200 },
 };
 
 const KIND_COLOR: Record<string, string> = {
@@ -75,7 +75,7 @@ function buildTopology() {
 
   const nodes: SysNode[] = [
     // ═══ TIER 0: THE CROWN ═══
-    mk("brain-opus", "Claude Opus 4", "orchestrator", "brain", 0, 0),
+    mk("brain-opus", "RIGHTHAND", "orchestrator", "brain", 0, 0),
 
     // ═══ TIER 1: BRAIN LAYER (spread across 4 columns) ═══
     mk("brain-sdk",    "Agent SDK",      "ai",      "brain", 1, -1.5),
@@ -333,22 +333,23 @@ export function Graph3D() {
         return 70 + Math.abs((s?.tier ?? 0) - (t?.tier ?? 0)) * 20;
       });
 
-      // Camera — pulled way back to see full spread
+      // Camera — centered on hierarchy midpoint, front-facing
+      const hierCenter = { x: 0, y: -25, z: 0 };  // midpoint of all tiers
       setTimeout(() => graph.cameraPosition(
-        { x: 0, y: 300, z: 600 }, { x: 0, y: -20, z: 0 }, 3000
+        { x: 0, y: 60, z: 500 }, hierCenter, 3000
       ), 300);
 
-      // Slow orbit — elevated to show hierarchy top-down
+      // Slow orbit — stays at a gentle elevation to show hierarchy
       let angle = 0;
       const rotateLoop = setInterval(() => {
         if (!graph) return;
         angle += 0.0008;
-        const d = 620;
+        const d = 520;
         graph.cameraPosition({
           x: d * Math.sin(angle),
-          y: 220 + 40 * Math.sin(angle * 0.3),
+          y: 60 + 30 * Math.sin(angle * 0.3),
           z: d * Math.cos(angle),
-        });
+        }, hierCenter);
       }, 50);
 
       /* ── WebSocket ── */
