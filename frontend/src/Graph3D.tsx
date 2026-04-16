@@ -246,7 +246,7 @@ export function Graph3D() {
           }
 
           // Label
-          const sprite = new SpriteText(node.label, isCrown ? 5 : 3.5, baseColor);
+          const sprite = new SpriteText(node.label, isCrown ? 10 : 7, baseColor);
           sprite.fontWeight = "600";
           sprite.backgroundColor = "rgba(0,0,0,0.55)";
           sprite.padding = 1.5;
