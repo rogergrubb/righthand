@@ -48,10 +48,11 @@ const ORB_RADIUS = 8;       // regular orbs (chunky & visible)
 const CROWN_RADIUS = 16;    // crown = 2x regular
 
 function buildTopology() {
-  // Each node gets explicit x, y, z for true 3D positioning
+  // Each node gets FIXED x, y, z — no physics simulation needed
   const mk = (id: string, label: string, kind: string, group: string,
               tier: number, x: number, y: number, z: number): SysNode => ({
-    id, label, kind, group, tier, size: 12, x, y, z,
+    id, label, kind, group, tier, size: 12,
+    x, y, z, fx: x, fy: y, fz: z,  // hard-pin — zero jitter
   });
 
   // Y tiers spaced 100 apart, centered around 0
@@ -169,24 +170,7 @@ function buildTopology() {
 
 const WS_URL = (import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000") + "/ws/graph";
 
-/* ── Soft position-pinning force: holds nodes near their assigned spots ── */
-function forcePin(nodes: SysNode[], strength = 0.06) {
-  // Save original positions
-  const origins = new Map<string, { x: number; y: number; z: number }>();
-  for (const n of nodes) {
-    origins.set(n.id, { x: n.x ?? 0, y: n.y ?? 0, z: n.z ?? 0 });
-  }
-  return (alpha: number) => {
-    for (const n of nodes) {
-      const o = origins.get(n.id);
-      if (!o) continue;
-      const k = alpha * strength;
-      n.x = (n.x ?? 0) + (o.x - (n.x ?? 0)) * k;
-      n.y = (n.y ?? 0) + (o.y - (n.y ?? 0)) * k;
-      n.z = (n.z ?? 0) + (o.z - (n.z ?? 0)) * k;
-    }
-  };
-}
+/* No physics force needed — all nodes use fx/fy/fz hard pins */
 
 export function Graph3D() {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -299,33 +283,44 @@ export function Graph3D() {
         .linkDirectionalParticleColor(() => "#ffffffcc")
         .linkOpacity(0.6)
 
-        /* ── Physics ── */
-        .d3AlphaDecay(0.015)
-        .d3VelocityDecay(0.5)
-        .warmupTicks(200)
-        .cooldownTime(5000);
+        /* ── Physics: disabled — nodes are hard-pinned ── */
+        .d3AlphaDecay(1)      // kill simulation immediately
+        .d3VelocityDecay(1)
+        .warmupTicks(0)
+        .cooldownTime(0);
 
-      // Soft pin force — keeps nodes near assigned positions but allows organic drift
-      graph.d3Force("pin", forcePin(nodes, 0.08));
-      // Repulsion so nodes don't overlap
-      graph.d3Force("charge")?.strength(-80);
-      // Link distances
-      graph.d3Force("link")?.distance((l: any) => {
-        const s = typeof l.source === "object" ? l.source : nodeMap.get(l.source);
-        const t = typeof l.target === "object" ? l.target : nodeMap.get(l.target);
-        return (s?.tier === t?.tier) ? 50 : 90;
-      });
+      // Disable all forces — we don't need them with fx/fy/fz
+      graph.d3Force("charge", null);
+      graph.d3Force("link", null);
+      graph.d3Force("center", null);
 
-      // Camera — angled to show depth (3D feel)
+      // Camera — angled to show 3D depth
       const hierCenter = { x: 20, y: -20, z: 0 };
-      setTimeout(() => graph.cameraPosition(
-        { x: 200, y: 180, z: 550 }, hierCenter, 3000
-      ), 300);
+      graph.cameraPosition({ x: 200, y: 180, z: 550 }, hierCenter);
 
-      // Orbit — varies elevation to show 3D depth
-      let angle = 0;
+      // Auto-rotation that PAUSES when user interacts (scroll, drag, click)
+      let angle = Math.atan2(200, 550); // start from initial camera angle
+      let userInteracting = false;
+      let idleTimer: ReturnType<typeof setTimeout> | null = null;
+      const IDLE_RESUME_MS = 4000; // resume rotation after 4s of no input
+
+      const pauseRotation = () => {
+        userInteracting = true;
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          userInteracting = false;
+          // Sync angle to current camera position so rotation continues smoothly
+          const pos = graph.cameraPosition();
+          angle = Math.atan2(pos.x, pos.z);
+        }, IDLE_RESUME_MS);
+      };
+
+      // Listen for user interaction on the canvas
+      el.addEventListener("pointerdown", pauseRotation);
+      el.addEventListener("wheel", pauseRotation);
+
       const rotateLoop = setInterval(() => {
-        if (!graph) return;
+        if (!graph || userInteracting) return;
         angle += 0.0008;
         const d = 580;
         graph.cameraPosition({
@@ -415,6 +410,9 @@ export function Graph3D() {
       window.addEventListener("resize", handleResize);
       return () => {
         window.removeEventListener("resize", handleResize);
+        el.removeEventListener("pointerdown", pauseRotation);
+        el.removeEventListener("wheel", pauseRotation);
+        if (idleTimer) clearTimeout(idleTimer);
         clearInterval(rotateLoop); clearInterval(pulseLoop); clearInterval(demoLoop);
         ws?.close();
       };
