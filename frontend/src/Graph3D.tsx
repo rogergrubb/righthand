@@ -4,22 +4,15 @@ import SpriteText from "three-spritetext";
 import * as THREE from "three";
 
 /* ──────────────────────────────────────────────────────────────
-   RIGHTHAND 3D System Visualization — Waterfall Hierarchy v5
+   RIGHTHAND 3D System Visualization — Waterfall v6
 
-   Uniform orb/label sizing, generous spacing, clear hierarchy.
-
-     T0  ORCHESTRATOR    — Claude Opus 4 (the crown)
-     T1  BRAIN LAYER     — SDK, Router, Haiku, Tool Registry
-     T2  SERVICE LAYER   — Voice, Schedule, Integrations
-     T3  DATA LAYER      — Memory/RAG, Database + tables
-     T4  PRESENTATION    — Frontend, 3D Graph, WebSocket
-
-   Pulses ripple top-down. Every node labeled uniformly.
+   Big orbs, deep 3D (sub-clusters staggered in Z),
+   crown "RIGHTHAND" at apex, everything fits viewport.
    ────────────────────────────────────────────────────────────── */
 
 type SysNode = {
   id: string; label: string; kind: string; group: string; tier: number;
-  size: number; col: number;
+  size: number;
   x?: number; y?: number; z?: number;
   fx?: number; fy?: number; fz?: number;
   __pulse?: number; __pulseColor?: string;
@@ -31,13 +24,12 @@ type SysNode = {
 };
 type SysLink = { source: string; target: string; kind: string };
 
-/* ── Tier layout — centered around Y=0 so everything fits viewport ── */
-const TIER_META: Record<number, { color: string; label: string; y: number }> = {
-  0: { color: "#ffd700", label: "ORCHESTRATOR",  y: 150 },
-  1: { color: "#c49fff", label: "BRAIN LAYER",   y: 70 },
-  2: { color: "#4aa3ff", label: "SERVICE LAYER",  y: -30 },
-  3: { color: "#44ddbb", label: "DATA LAYER",     y: -120 },
-  4: { color: "#88aaff", label: "PRESENTATION",   y: -200 },
+const TIER_META: Record<number, { color: string; label: string }> = {
+  0: { color: "#ffd700", label: "ORCHESTRATOR" },
+  1: { color: "#c49fff", label: "BRAIN LAYER" },
+  2: { color: "#4aa3ff", label: "SERVICE LAYER" },
+  3: { color: "#44ddbb", label: "DATA LAYER" },
+  4: { color: "#88aaff", label: "PRESENTATION" },
 };
 
 const KIND_COLOR: Record<string, string> = {
@@ -45,87 +37,78 @@ const KIND_COLOR: Record<string, string> = {
   table: "#66ccaa", data: "#7dd87d", task: "#ffd166", integration: "#ff5d8f",
   orchestrator: "#ffd700",
 };
-
 const GROUP_COLOR: Record<string, string> = {
   brain: "#c49fff", voice: "#4aa3ff", memory: "#7dd87d", graph: "#ffb020",
   schedule: "#ffd166", integrations: "#ff5d8f", database: "#44ddbb",
   frontend: "#88aaff",
 };
 
-/* ── Layout constants — generous spacing ── */
-const COL_SPREAD = 70;   // horizontal gap between columns
-const Z_JITTER = 30;     // depth variation for 3D feel
-
-/* ── Uniform sizing ── */
-const ORB_RADIUS = 4.0;        // standard orb radius
-const CROWN_RADIUS = 6.0;      // crown orb radius (only slightly bigger)
-const LABEL_SIZE = 3.2;         // standard label font size
-const CROWN_LABEL_SIZE = 3.8;   // crown label font size
+/* ── Orb sizing ── */
+const ORB_RADIUS = 8;       // regular orbs (chunky & visible)
+const CROWN_RADIUS = 16;    // crown = 2x regular
 
 function buildTopology() {
-  const mk = (id: string, label: string, kind: string, group: string, tier: number, col: number): SysNode => {
-    const tierY = TIER_META[tier]?.y ?? 0;
-    return {
-      id, label, kind, group, tier, size: 12, col,
-      x: col * COL_SPREAD,
-      y: tierY + (Math.random() - 0.5) * 6,
-      z: (Math.random() - 0.5) * Z_JITTER,
-    };
-  };
+  // Each node gets explicit x, y, z for true 3D positioning
+  const mk = (id: string, label: string, kind: string, group: string,
+              tier: number, x: number, y: number, z: number): SysNode => ({
+    id, label, kind, group, tier, size: 12, x, y, z,
+  });
 
+  // Y tiers spaced 100 apart, centered around 0
+  // X spread wide, Z staggered per sub-cluster for real depth
   const nodes: SysNode[] = [
-    // ═══ TIER 0: THE CROWN ═══
-    mk("brain-opus", "RIGHTHAND", "orchestrator", "brain", 0, 0),
+    // ═══ T0: CROWN — center top ═══
+    mk("brain-opus", "RIGHTHAND", "orchestrator", "brain", 0,   0, 200, 0),
 
-    // ═══ TIER 1: BRAIN LAYER (spread across 4 columns) ═══
-    mk("brain-sdk",    "Agent SDK",      "ai",      "brain", 1, -1.5),
-    mk("brain-router", "Agent Router",   "service", "brain", 1, -0.5),
-    mk("brain-haiku",  "Claude Haiku",   "ai",      "brain", 1,  0.5),
-    mk("brain-tools",  "Tool Registry",  "service", "brain", 1,  1.5),
+    // ═══ T1: BRAIN — spread horizontally ═══
+    mk("brain-sdk",    "Agent SDK",     "ai",      "brain", 1,  -80, 100, -20),
+    mk("brain-router", "Agent Router",  "service", "brain", 1,  -25, 100,  15),
+    mk("brain-haiku",  "Claude Haiku",  "ai",      "brain", 1,   25, 100, -15),
+    mk("brain-tools",  "Tool Registry", "service", "brain", 1,   80, 100,  20),
 
-    // ═══ TIER 2: SERVICE LAYER (3 sub-clusters, wide spread) ═══
-    // Voice (far left)
-    mk("voice-rt",     "OpenAI Realtime", "api",     "voice",        2, -5),
-    mk("voice-bridge", "Voice Bridge",    "service", "voice",        2, -4),
-    mk("voice-vad",    "Semantic VAD",    "service", "voice",        2, -6),
-    mk("voice-tts",    "TTS Engine",      "service", "voice",        2, -4.5),
-    mk("voice-asr",    "Speech Recog",    "service", "voice",        2, -5.5),
-    // Schedule (center)
-    mk("s-cron",  "APScheduler",   "service", "schedule", 2, -0.5),
-    mk("s-les",   "Lessons Daily", "task",    "schedule", 2,  0.5),
-    mk("s-tre",   "Trends Daily",  "task",    "schedule", 2,  1.5),
-    // Integrations (far right)
-    mk("i-gh", "GitHub",  "integration", "integrations", 2, 4),
-    mk("i-gm", "Gmail",   "integration", "integrations", 2, 5),
-    mk("i-sl", "Slack",   "integration", "integrations", 2, 6),
-    mk("i-st", "Stripe",  "integration", "integrations", 2, 4.5),
-    mk("i-li", "Linear",  "integration", "integrations", 2, 5.5),
+    // ═══ T2: SERVICES — 3 sub-clusters staggered in Z ═══
+    // Voice (left, pushed FORWARD in z)
+    mk("voice-rt",     "OpenAI Realtime", "api",     "voice",  2,  -200, 0,  80),
+    mk("voice-bridge", "Voice Bridge",    "service", "voice",  2,  -150, 0,  100),
+    mk("voice-vad",    "Semantic VAD",    "service", "voice",  2,  -250, 0,  60),
+    mk("voice-tts",    "TTS Engine",      "service", "voice",  2,  -180,-10, 120),
+    mk("voice-asr",    "Speech Recog",    "service", "voice",  2,  -220,-10, 40),
+    // Schedule (center, at Z=0)
+    mk("s-cron", "APScheduler",   "service", "schedule", 2,   -20, 0,  0),
+    mk("s-les",  "Lessons Daily", "task",    "schedule", 2,    30, 0, -15),
+    mk("s-tre",  "Trends Daily",  "task",    "schedule", 2,    80, 0,  15),
+    // Integrations (right, pushed BACK in z)
+    mk("i-gh", "GitHub",  "integration", "integrations", 2,   180, 0, -80),
+    mk("i-gm", "Gmail",   "integration", "integrations", 2,   230, 0, -60),
+    mk("i-sl", "Slack",   "integration", "integrations", 2,   280, 0, -100),
+    mk("i-st", "Stripe",  "integration", "integrations", 2,   200,-10, -40),
+    mk("i-li", "Linear",  "integration", "integrations", 2,   250,-10, -120),
 
-    // ═══ TIER 3: DATA LAYER (2 sub-clusters, wide spread) ═══
-    // Memory (left)
-    mk("mem-pgv",    "pgvector",        "database", "memory",   3, -3.5),
-    mk("mem-emb",    "Embeddings",      "service",  "memory",   3, -2.5),
-    mk("mem-chunks", "Memory Chunks",   "data",     "memory",   3, -4.5),
-    mk("mem-recall", "Semantic Recall",  "service",  "memory",   3, -3),
-    // Database (right)
-    mk("db-pg",      "PostgreSQL",      "database", "database", 3,  1),
-    mk("db-users",   "users",           "table",    "database", 3,  3),
-    mk("db-conv",    "conversations",   "table",    "database", 3,  4),
-    mk("db-lessons", "lessons_learned", "table",    "database", 3,  0),
-    mk("db-trends",  "trend_reports",   "table",    "database", 3,  5),
-    mk("db-gn",      "graph_nodes",     "table",    "database", 3,  2),
-    mk("db-ge",      "graph_edges",     "table",    "database", 3,  3.5),
-    mk("db-mc",      "memory_chunks",   "table",    "database", 3, -1),
+    // ═══ T3: DATA — 2 sub-clusters, Z-staggered ═══
+    // Memory (left, forward)
+    mk("mem-pgv",    "pgvector",       "database", "memory",   3, -160, -120,  60),
+    mk("mem-emb",    "Embeddings",     "service",  "memory",   3, -110, -120,  40),
+    mk("mem-chunks", "Memory Chunks",  "data",     "memory",   3, -200, -130,  80),
+    mk("mem-recall", "Semantic Recall", "service",  "memory",   3, -140, -130,  30),
+    // Database (right, back)
+    mk("db-pg",      "PostgreSQL",      "database", "database", 3,   50, -120, -50),
+    mk("db-users",   "users",           "table",    "database", 3,  130, -120, -70),
+    mk("db-conv",    "conversations",   "table",    "database", 3,  180, -130, -40),
+    mk("db-lessons", "lessons_learned", "table",    "database", 3,   10, -130, -30),
+    mk("db-trends",  "trend_reports",   "table",    "database", 3,  230, -120, -90),
+    mk("db-gn",      "graph_nodes",     "table",    "database", 3,  100, -130, -60),
+    mk("db-ge",      "graph_edges",     "table",    "database", 3,  160, -140, -80),
+    mk("db-mc",      "memory_chunks",   "table",    "database", 3,  -50, -130, -20),
 
-    // ═══ TIER 4: PRESENTATION (spread wide) ═══
-    mk("g3d",      "3D Force Graph",  "service", "graph",    4, -3),
-    mk("g-scan",   "File Scanner",    "service", "graph",    4, -1.5),
-    mk("g-watch",  "File Watcher",    "service", "graph",    4, -4),
-    mk("g-ws",     "WebSocket Bus",   "service", "graph",    4,  0),
-    mk("fe-react", "React App",       "service", "frontend", 4,  1.5),
-    mk("fe-vite",  "Vite",            "service", "frontend", 4,  3),
-    mk("fe-vui",   "Voice Panel",     "service", "frontend", 4,  4),
-    mk("fe-gui",   "Graph Renderer",  "service", "frontend", 4, -0.5),
+    // ═══ T4: PRESENTATION — spread wide, z-varied ═══
+    mk("g3d",      "3D Force Graph", "service", "graph",    4, -150, -240,  30),
+    mk("g-scan",   "File Scanner",   "service", "graph",    4,  -70, -240, -20),
+    mk("g-watch",  "File Watcher",   "service", "graph",    4, -200, -250,  50),
+    mk("g-ws",     "WebSocket Bus",  "service", "graph",    4,    0, -240,   0),
+    mk("fe-react", "React App",      "service", "frontend", 4,   80, -240,  40),
+    mk("fe-vite",  "Vite",           "service", "frontend", 4,  160, -250, -30),
+    mk("fe-vui",   "Voice Panel",    "service", "frontend", 4,  220, -240,  60),
+    mk("fe-gui",   "Graph Renderer", "service", "frontend", 4,   30, -250, -40),
   ];
 
   const links: SysLink[] = [
@@ -186,15 +169,21 @@ function buildTopology() {
 
 const WS_URL = (import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000") + "/ws/graph";
 
-/* ── Hierarchy force: strong Y pinning, gentle X guidance ── */
-function forceHierarchy(nodes: SysNode[], yStrength = 0.4, xStrength = 0.08) {
+/* ── Soft position-pinning force: holds nodes near their assigned spots ── */
+function forcePin(nodes: SysNode[], strength = 0.06) {
+  // Save original positions
+  const origins = new Map<string, { x: number; y: number; z: number }>();
+  for (const n of nodes) {
+    origins.set(n.id, { x: n.x ?? 0, y: n.y ?? 0, z: n.z ?? 0 });
+  }
   return (alpha: number) => {
     for (const n of nodes) {
-      const tierY = TIER_META[n.tier]?.y ?? 0;
-      const targetX = n.col * COL_SPREAD;
-      n.y = (n.y ?? 0) + (tierY - (n.y ?? 0)) * alpha * yStrength;
-      n.x = (n.x ?? 0) + (targetX - (n.x ?? 0)) * alpha * xStrength;
-      n.z = (n.z ?? 0) * (1 - alpha * 0.015);
+      const o = origins.get(n.id);
+      if (!o) continue;
+      const k = alpha * strength;
+      n.x = (n.x ?? 0) + (o.x - (n.x ?? 0)) * k;
+      n.y = (n.y ?? 0) + (o.y - (n.y ?? 0)) * k;
+      n.z = (n.z ?? 0) + (o.z - (n.z ?? 0)) * k;
     }
   };
 }
@@ -217,11 +206,10 @@ export function Graph3D() {
         .width(el.clientWidth)
         .height(el.clientHeight)
         .graphData({ nodes, links })
-        .dagMode(null)
 
-        /* ── Node: uniform sphere + ring + label ── */
+        /* ── Node: orb + glow ring + label ── */
         .nodeThreeObject((node: any) => {
-          const group = new THREE.Group();
+          const grp = new THREE.Group();
           const isCrown = node.id === "brain-opus";
           const baseColor = isCrown
             ? "#ffd700"
@@ -231,46 +219,40 @@ export function Graph3D() {
           // Sphere
           const geo = new THREE.SphereGeometry(radius, 24, 24);
           const mat = new THREE.MeshLambertMaterial({
-            color: baseColor,
-            transparent: true,
-            opacity: 0.93,
-            emissive: baseColor,
-            emissiveIntensity: isCrown ? 0.55 : 0.3,
+            color: baseColor, transparent: true, opacity: 0.92,
+            emissive: baseColor, emissiveIntensity: isCrown ? 0.55 : 0.3,
           });
-          group.add(new THREE.Mesh(geo, mat));
+          grp.add(new THREE.Mesh(geo, mat));
 
           // Glow ring
-          const ringGeo = new THREE.RingGeometry(radius * 1.4, radius * 1.8, 32);
+          const ringGeo = new THREE.RingGeometry(radius * 1.3, radius * 1.7, 32);
           const ringMat = new THREE.MeshBasicMaterial({
-            color: baseColor,
-            transparent: true,
-            opacity: isCrown ? 0.12 : 0.05,
-            side: THREE.DoubleSide,
+            color: baseColor, transparent: true,
+            opacity: isCrown ? 0.12 : 0.05, side: THREE.DoubleSide,
           });
           const ring = new THREE.Mesh(ringGeo, ringMat);
           ring.lookAt(0, 0, 1);
-          group.add(ring);
+          grp.add(ring);
 
-          // Crown gets subtle outer halo
+          // Crown outer halo
           if (isCrown) {
-            const hGeo = new THREE.RingGeometry(radius * 2.0, radius * 2.6, 48);
+            const hGeo = new THREE.RingGeometry(radius * 1.8, radius * 2.3, 48);
             const hMat = new THREE.MeshBasicMaterial({
               color: "#ffd700", transparent: true, opacity: 0.05, side: THREE.DoubleSide,
             });
             const h = new THREE.Mesh(hGeo, hMat);
             h.lookAt(0, 0, 1);
-            group.add(h);
+            grp.add(h);
           }
 
-          // Label — uniform size
-          const fontSize = isCrown ? CROWN_LABEL_SIZE : LABEL_SIZE;
-          const sprite = new SpriteText(node.label, fontSize, baseColor);
+          // Label
+          const sprite = new SpriteText(node.label, isCrown ? 5 : 3.5, baseColor);
           sprite.fontWeight = "600";
           sprite.backgroundColor = "rgba(0,0,0,0.55)";
-          sprite.padding = 1.2;
+          sprite.padding = 1.5;
           sprite.borderRadius = 2;
-          (sprite as any).position.set(0, -(radius + 5), 0);
-          group.add(sprite);
+          (sprite as any).position.set(0, -(radius + 10), 0);
+          grp.add(sprite);
 
           // Store refs
           node.__sphereMat = mat;
@@ -279,7 +261,7 @@ export function Graph3D() {
           node.__radius = radius;
           node.__baseColor = baseColor;
 
-          return group;
+          return grp;
         })
         .nodeThreeObjectExtend(false)
 
@@ -293,8 +275,8 @@ export function Graph3D() {
           if (active) return "#ffffff99";
           const tier = Math.min(s?.tier ?? 4, t?.tier ?? 4);
           return TIER_META[tier]
-            ? `${TIER_META[tier].color}20`
-            : "rgba(100,150,240,0.10)";
+            ? `${TIER_META[tier].color}25`
+            : "rgba(100,150,240,0.12)";
         })
         .linkWidth((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
@@ -302,7 +284,7 @@ export function Graph3D() {
           const now = Date.now();
           const active = (s?.__pulse && now - s.__pulse < 1400) ||
                          (t?.__pulse && now - t.__pulse < 1400);
-          return active ? 2.5 : 0.4;
+          return active ? 2.5 : 0.5;
         })
         .linkDirectionalParticles((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
@@ -318,36 +300,37 @@ export function Graph3D() {
         .linkOpacity(0.6)
 
         /* ── Physics ── */
-        .d3AlphaDecay(0.01)
-        .d3VelocityDecay(0.45)
-        .warmupTicks(180)
-        .cooldownTime(6000);
+        .d3AlphaDecay(0.015)
+        .d3VelocityDecay(0.5)
+        .warmupTicks(200)
+        .cooldownTime(5000);
 
-      // Hierarchy force
-      graph.d3Force("hierarchy", forceHierarchy(nodes, 0.45, 0.12));
-      graph.d3Force("charge")?.strength(-25);
+      // Soft pin force — keeps nodes near assigned positions but allows organic drift
+      graph.d3Force("pin", forcePin(nodes, 0.08));
+      // Repulsion so nodes don't overlap
+      graph.d3Force("charge")?.strength(-80);
+      // Link distances
       graph.d3Force("link")?.distance((l: any) => {
         const s = typeof l.source === "object" ? l.source : nodeMap.get(l.source);
         const t = typeof l.target === "object" ? l.target : nodeMap.get(l.target);
-        if (s?.tier === t?.tier) return 40;
-        return 70 + Math.abs((s?.tier ?? 0) - (t?.tier ?? 0)) * 20;
+        return (s?.tier === t?.tier) ? 50 : 90;
       });
 
-      // Camera — centered on hierarchy midpoint, front-facing
-      const hierCenter = { x: 0, y: -25, z: 0 };  // midpoint of all tiers
+      // Camera — angled to show depth (3D feel)
+      const hierCenter = { x: 20, y: -20, z: 0 };
       setTimeout(() => graph.cameraPosition(
-        { x: 0, y: 60, z: 500 }, hierCenter, 3000
+        { x: 200, y: 180, z: 550 }, hierCenter, 3000
       ), 300);
 
-      // Slow orbit — stays at a gentle elevation to show hierarchy
+      // Orbit — varies elevation to show 3D depth
       let angle = 0;
       const rotateLoop = setInterval(() => {
         if (!graph) return;
         angle += 0.0008;
-        const d = 520;
+        const d = 580;
         graph.cameraPosition({
-          x: d * Math.sin(angle),
-          y: 60 + 30 * Math.sin(angle * 0.3),
+          x: d * Math.sin(angle) * 0.8,
+          y: 120 + 80 * Math.sin(angle * 0.4),
           z: d * Math.cos(angle),
         }, hierCenter);
       }, 50);
@@ -394,8 +377,7 @@ export function Graph3D() {
           n.__sphereMat.color.set(color);
           n.__sphereMat.emissive.set(color);
           n.__sphereMat.emissiveIntensity = isPulsing ? 0.85 : (n.id === "brain-opus" ? 0.55 : 0.3);
-          n.__sphereMat.opacity = isPulsing ? 1.0 : 0.93;
-
+          n.__sphereMat.opacity = isPulsing ? 1.0 : 0.92;
           if (n.__ringMat) {
             n.__ringMat.color.set(color);
             n.__ringMat.opacity = isPulsing ? 0.25 : (n.id === "brain-opus" ? 0.12 : 0.05);
@@ -409,57 +391,39 @@ export function Graph3D() {
         graph.linkDirectionalParticles(graph.linkDirectionalParticles());
       }, 70);
 
-      /* ── Cascade demo pulses (waterfall top→down) ── */
+      /* ── Cascade demo pulses ── */
       const demoLoop = setInterval(() => {
         const gd = graph.graphData();
         if (!gd.nodes.length) return;
-
-        // Crown fires first
         const crown = gd.nodes.find((n: any) => n.id === "brain-opus");
         if (crown) { crown.__pulse = Date.now(); crown.__pulseColor = "#ffd700"; }
-
-        // Cascade through tiers with staggered delay
-        const tiers = [1, 2, 3, 4];
-        tiers.forEach((tier, ti) => {
+        [1, 2, 3, 4].forEach((tier, ti) => {
           const tierNodes = gd.nodes.filter((n: any) => n.tier === tier);
-          // Pick 1-2 random nodes per tier
           const picks = Math.min(tierNodes.length, 1 + Math.floor(Math.random() * 2));
           for (let i = 0; i < picks; i++) {
             const n = tierNodes[Math.floor(Math.random() * tierNodes.length)];
             if (n) {
               const delay = 250 * (ti + 1) + i * 80;
-              setTimeout(() => {
-                n.__pulse = Date.now();
-                n.__pulseColor = n.__baseColor;
-              }, delay);
+              setTimeout(() => { n.__pulse = Date.now(); n.__pulseColor = n.__baseColor; }, delay);
             }
           }
         });
       }, 3500);
 
       setStatus("live");
-
-      const handleResize = () => {
-        if (el && graph) graph.width(el.clientWidth).height(el.clientHeight);
-      };
+      const handleResize = () => { if (el && graph) graph.width(el.clientWidth).height(el.clientHeight); };
       window.addEventListener("resize", handleResize);
-
       return () => {
         window.removeEventListener("resize", handleResize);
-        clearInterval(rotateLoop);
-        clearInterval(pulseLoop);
-        clearInterval(demoLoop);
+        clearInterval(rotateLoop); clearInterval(pulseLoop); clearInterval(demoLoop);
         ws?.close();
       };
-    } catch (e) {
-      console.error("Graph3D fatal:", e);
-      setStatus("failed");
-    }
+    } catch (e) { console.error("Graph3D fatal:", e); setStatus("failed"); }
   }, []);
 
   return (
     <div ref={mountRef} style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* ── Tier legend (left) ── */}
+      {/* Tier legend */}
       <div style={{
         position: "absolute", top: 60, left: 14, padding: "10px 14px",
         zIndex: 999, pointerEvents: "none",
@@ -470,8 +434,7 @@ export function Graph3D() {
           <div key={tier} style={{
             fontSize: 9, fontWeight: 700, letterSpacing: 2.5,
             color: meta.color, opacity: 0.8, marginBottom: 10,
-            textTransform: "uppercase",
-            textShadow: `0 0 8px ${meta.color}44`,
+            textTransform: "uppercase", textShadow: `0 0 8px ${meta.color}44`,
           }}>
             <span style={{
               display: "inline-block", width: 14, height: 2,
@@ -482,18 +445,15 @@ export function Graph3D() {
           </div>
         ))}
       </div>
-
-      {/* ── Title ── */}
+      {/* Title */}
       <div style={{
-        position: "absolute", top: 14, left: 18,
-        zIndex: 999, pointerEvents: "none",
+        position: "absolute", top: 14, left: 18, zIndex: 999, pointerEvents: "none",
         fontSize: 11, fontWeight: 700, letterSpacing: 6,
         color: "rgba(255,255,255,0.5)", textTransform: "uppercase",
       }}>
         RIGHTHAND · SYSTEM HIERARCHY
       </div>
-
-      {/* ── Status ── */}
+      {/* Status */}
       <div style={{
         position: "absolute", bottom: 8, right: 12,
         fontSize: 10, opacity: 0.4, pointerEvents: "none", zIndex: 999,
