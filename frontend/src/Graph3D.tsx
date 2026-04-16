@@ -283,15 +283,14 @@ export function Graph3D() {
         .linkDirectionalParticleColor(() => "#ffffffcc")
         .linkOpacity(0.6)
 
-        /* ── Physics: disabled — nodes are hard-pinned ── */
-        .d3AlphaDecay(1)      // kill simulation immediately
+        /* ── Physics: minimal — just enough to resolve links ── */
+        .d3AlphaDecay(0.5)
         .d3VelocityDecay(1)
-        .warmupTicks(0)
-        .cooldownTime(0);
+        .warmupTicks(10)       // resolve link source/target refs
+        .cooldownTime(200);    // stop quickly after
 
-      // Disable all forces — we don't need them with fx/fy/fz
+      // Kill movement forces but keep link resolution
       graph.d3Force("charge", null);
-      graph.d3Force("link", null);
       graph.d3Force("center", null);
 
       // Camera — angled to show 3D depth
