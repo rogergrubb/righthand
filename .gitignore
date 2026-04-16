@@ -1,0 +1,12 @@
+.env
+.env.scratchpad.bak
+.env.*.bak
+*.pyc
+__pycache__/
+node_modules/
+dist/
+.next/
+.venv/
+venv/
+.DS_Store
+*.log
