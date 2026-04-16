@@ -10,3 +10,8 @@ dist/
 venv/
 .DS_Store
 *.log
+
+# Windows Node.js compile cache (npm artifact)
+node-compile-cache/
+**/node-compile-cache/
+C:\\*
