@@ -4,10 +4,10 @@ import SpriteText from "three-spritetext";
 import * as THREE from "three";
 
 /* ──────────────────────────────────────────────────────────────
-   RIGHTHAND 3D System Visualization — Waterfall v6
+   RIGHTHAND 3D System Visualization — Polished v7
 
-   Big orbs, deep 3D (sub-clusters staggered in Z),
-   crown "RIGHTHAND" at apex, everything fits viewport.
+   Arced tiers, semicircle fans, ambient glow, bloom lighting,
+   crown at apex, waterfall cascade pulses.
    ────────────────────────────────────────────────────────────── */
 
 type SysNode = {
@@ -43,73 +43,110 @@ const GROUP_COLOR: Record<string, string> = {
   frontend: "#88aaff",
 };
 
-/* ── Orb sizing ── */
-const ORB_RADIUS = 8;       // regular orbs (chunky & visible)
-const CROWN_RADIUS = 16;    // crown = 2x regular
+const ORB_RADIUS = 8;
+const CROWN_RADIUS = 16;
+
+/* ── Helper: place N items along an arc ── */
+function arc(
+  items: string[][],  // [id, label, kind, group]
+  tier: number, y: number,
+  radius: number,       // arc radius
+  startAngle: number,   // radians
+  endAngle: number,
+  yJitter = 8,
+): SysNode[] {
+  const n = items.length;
+  return items.map((item, i) => {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const angle = startAngle + t * (endAngle - startAngle);
+    const x = radius * Math.sin(angle);
+    const z = radius * Math.cos(angle);
+    const yy = y + (Math.random() - 0.5) * yJitter;
+    return {
+      id: item[0], label: item[1], kind: item[2], group: item[3],
+      tier, size: 12,
+      x, y: yy, z, fx: x, fy: yy, fz: z,
+    };
+  });
+}
 
 function buildTopology() {
-  // Each node gets FIXED x, y, z — no physics simulation needed
   const mk = (id: string, label: string, kind: string, group: string,
               tier: number, x: number, y: number, z: number): SysNode => ({
     id, label, kind, group, tier, size: 12,
-    x, y, z, fx: x, fy: y, fz: z,  // hard-pin — zero jitter
+    x, y, z, fx: x, fy: y, fz: z,
   });
 
-  // Y tiers spaced 100 apart, centered around 0
-  // X spread wide, Z staggered per sub-cluster for real depth
   const nodes: SysNode[] = [
-    // ═══ T0: CROWN — center top ═══
-    mk("brain-opus", "RIGHTHAND", "orchestrator", "brain", 0,   0, 200, 0),
+    // ═══ T0: CROWN ═══
+    mk("brain-opus", "RIGHTHAND", "orchestrator", "brain", 0,  0, 220, 0),
 
-    // ═══ T1: BRAIN — spread horizontally ═══
-    mk("brain-sdk",    "Agent SDK",     "ai",      "brain", 1,  -80, 100, -20),
-    mk("brain-router", "Agent Router",  "service", "brain", 1,  -25, 100,  15),
-    mk("brain-haiku",  "Claude Haiku",  "ai",      "brain", 1,   25, 100, -15),
-    mk("brain-tools",  "Tool Registry", "service", "brain", 1,   80, 100,  20),
+    // ═══ T1: BRAIN — arc across 120° ═══
+    ...arc([
+      ["brain-sdk",    "Agent SDK",     "ai",      "brain"],
+      ["brain-router", "Agent Router",  "service", "brain"],
+      ["brain-haiku",  "Claude Haiku",  "ai",      "brain"],
+      ["brain-tools",  "Tool Registry", "service", "brain"],
+    ], 1, 110, 120, -Math.PI * 0.35, Math.PI * 0.35),
 
-    // ═══ T2: SERVICES — 3 sub-clusters staggered in Z ═══
-    // Voice (left, pushed FORWARD in z)
-    mk("voice-rt",     "OpenAI Realtime", "api",     "voice",  2,  -200, 0,  80),
-    mk("voice-bridge", "Voice Bridge",    "service", "voice",  2,  -150, 0,  100),
-    mk("voice-vad",    "Semantic VAD",    "service", "voice",  2,  -250, 0,  60),
-    mk("voice-tts",    "TTS Engine",      "service", "voice",  2,  -180,-10, 120),
-    mk("voice-asr",    "Speech Recog",    "service", "voice",  2,  -220,-10, 40),
-    // Schedule (center, at Z=0)
-    mk("s-cron", "APScheduler",   "service", "schedule", 2,   -20, 0,  0),
-    mk("s-les",  "Lessons Daily", "task",    "schedule", 2,    30, 0, -15),
-    mk("s-tre",  "Trends Daily",  "task",    "schedule", 2,    80, 0,  15),
-    // Integrations (right, pushed BACK in z)
-    mk("i-gh", "GitHub",  "integration", "integrations", 2,   180, 0, -80),
-    mk("i-gm", "Gmail",   "integration", "integrations", 2,   230, 0, -60),
-    mk("i-sl", "Slack",   "integration", "integrations", 2,   280, 0, -100),
-    mk("i-st", "Stripe",  "integration", "integrations", 2,   200,-10, -40),
-    mk("i-li", "Linear",  "integration", "integrations", 2,   250,-10, -120),
+    // ═══ T2: SERVICES — 3 sub-clusters, each arced ═══
+    // Voice (left arc, forward-facing)
+    ...arc([
+      ["voice-vad",    "Semantic VAD",    "service", "voice"],
+      ["voice-asr",    "Speech Recog",    "service", "voice"],
+      ["voice-rt",     "OpenAI Realtime", "api",     "voice"],
+      ["voice-bridge", "Voice Bridge",    "service", "voice"],
+      ["voice-tts",    "TTS Engine",      "service", "voice"],
+    ], 2, 0, 100, Math.PI * 0.55, Math.PI * 0.95, 12),
 
-    // ═══ T3: DATA — 2 sub-clusters, Z-staggered ═══
-    // Memory (left, forward)
-    mk("mem-pgv",    "pgvector",       "database", "memory",   3, -160, -120,  60),
-    mk("mem-emb",    "Embeddings",     "service",  "memory",   3, -110, -120,  40),
-    mk("mem-chunks", "Memory Chunks",  "data",     "memory",   3, -200, -130,  80),
-    mk("mem-recall", "Semantic Recall", "service",  "memory",   3, -140, -130,  30),
-    // Database (right, back)
-    mk("db-pg",      "PostgreSQL",      "database", "database", 3,   50, -120, -50),
-    mk("db-users",   "users",           "table",    "database", 3,  130, -120, -70),
-    mk("db-conv",    "conversations",   "table",    "database", 3,  180, -130, -40),
-    mk("db-lessons", "lessons_learned", "table",    "database", 3,   10, -130, -30),
-    mk("db-trends",  "trend_reports",   "table",    "database", 3,  230, -120, -90),
-    mk("db-gn",      "graph_nodes",     "table",    "database", 3,  100, -130, -60),
-    mk("db-ge",      "graph_edges",     "table",    "database", 3,  160, -140, -80),
-    mk("db-mc",      "memory_chunks",   "table",    "database", 3,  -50, -130, -20),
+    // Schedule (center arc)
+    ...arc([
+      ["s-cron", "APScheduler",   "service", "schedule"],
+      ["s-les",  "Lessons Daily", "task",    "schedule"],
+      ["s-tre",  "Trends Daily",  "task",    "schedule"],
+    ], 2, 0, 80, -Math.PI * 0.12, Math.PI * 0.12),
 
-    // ═══ T4: PRESENTATION — spread wide, z-varied ═══
-    mk("g3d",      "3D Force Graph", "service", "graph",    4, -150, -240,  30),
-    mk("g-scan",   "File Scanner",   "service", "graph",    4,  -70, -240, -20),
-    mk("g-watch",  "File Watcher",   "service", "graph",    4, -200, -250,  50),
-    mk("g-ws",     "WebSocket Bus",  "service", "graph",    4,    0, -240,   0),
-    mk("fe-react", "React App",      "service", "frontend", 4,   80, -240,  40),
-    mk("fe-vite",  "Vite",           "service", "frontend", 4,  160, -250, -30),
-    mk("fe-vui",   "Voice Panel",    "service", "frontend", 4,  220, -240,  60),
-    mk("fe-gui",   "Graph Renderer", "service", "frontend", 4,   30, -250, -40),
+    // Integrations (right arc, back-facing)
+    ...arc([
+      ["i-gh", "GitHub",  "integration", "integrations"],
+      ["i-st", "Stripe",  "integration", "integrations"],
+      ["i-gm", "Gmail",   "integration", "integrations"],
+      ["i-sl", "Slack",   "integration", "integrations"],
+      ["i-li", "Linear",  "integration", "integrations"],
+    ], 2, 0, 100, -Math.PI * 0.95, -Math.PI * 0.55, 12),
+
+    // ═══ T3: DATA — Memory arc (left) + DB semicircle (right) ═══
+    // Memory arc
+    ...arc([
+      ["mem-chunks", "Memory Chunks",   "data",     "memory"],
+      ["mem-emb",    "Embeddings",       "service",  "memory"],
+      ["mem-pgv",    "pgvector",         "database", "memory"],
+      ["mem-recall", "Semantic Recall",  "service",  "memory"],
+    ], 3, -130, 90, Math.PI * 0.4, Math.PI * 0.8),
+
+    // Database semicircle — PostgreSQL at center, tables fanned around it
+    mk("db-pg", "PostgreSQL", "database", "database", 3,  40, -120, -40),
+    ...arc([
+      ["db-mc",      "memory_chunks",   "table", "database"],
+      ["db-lessons", "lessons_learned",  "table", "database"],
+      ["db-conv",    "conversations",    "table", "database"],
+      ["db-users",   "users",            "table", "database"],
+      ["db-gn",      "graph_nodes",      "table", "database"],
+      ["db-ge",      "graph_edges",      "table", "database"],
+      ["db-trends",  "trend_reports",    "table", "database"],
+    ], 3, -140, 130, -Math.PI * 0.7, -Math.PI * 0.15, 10),
+
+    // ═══ T4: PRESENTATION — wide arc ═══
+    ...arc([
+      ["g-watch",  "File Watcher",   "service", "graph"],
+      ["g3d",      "3D Force Graph", "service", "graph"],
+      ["g-scan",   "File Scanner",   "service", "graph"],
+      ["g-ws",     "WebSocket Bus",  "service", "graph"],
+      ["fe-gui",   "Graph Renderer", "service", "frontend"],
+      ["fe-react", "React App",      "service", "frontend"],
+      ["fe-vite",  "Vite",           "service", "frontend"],
+      ["fe-vui",   "Voice Panel",    "service", "frontend"],
+    ], 4, -260, 160, Math.PI * 0.7, -Math.PI * 0.7, 10),
   ];
 
   const links: SysLink[] = [
@@ -118,7 +155,6 @@ function buildTopology() {
     { source: "brain-opus", target: "brain-router",   kind: "powers" },
     { source: "brain-opus", target: "brain-haiku",    kind: "delegates" },
     { source: "brain-opus", target: "brain-tools",    kind: "powers" },
-    // Brain internal
     { source: "brain-router", target: "brain-sdk",    kind: "routes" },
     { source: "brain-tools",  target: "brain-sdk",    kind: "provides" },
     // Brain → Service
@@ -135,7 +171,7 @@ function buildTopology() {
     { source: "voice-vad", target: "voice-rt",     kind: "detects" },
     { source: "voice-tts", target: "voice-rt",     kind: "speaks" },
     { source: "voice-asr", target: "voice-rt",     kind: "transcribes" },
-    // Schedule internal
+    // Schedule
     { source: "s-cron", target: "s-les", kind: "triggers" },
     { source: "s-cron", target: "s-tre", kind: "triggers" },
     // Service → Data
@@ -147,7 +183,7 @@ function buildTopology() {
     { source: "s-tre",        target: "db-trends",   kind: "writes" },
     { source: "brain-router", target: "db-conv",     kind: "logs" },
     { source: "mem-chunks",   target: "db-pg",       kind: "stores" },
-    // Database internal
+    // Database
     { source: "db-pg", target: "db-users",   kind: "has" },
     { source: "db-pg", target: "db-conv",    kind: "has" },
     { source: "db-pg", target: "db-lessons", kind: "has" },
@@ -170,8 +206,6 @@ function buildTopology() {
 
 const WS_URL = (import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000") + "/ws/graph";
 
-/* No physics force needed — all nodes use fx/fy/fz hard pins */
-
 export function Graph3D() {
   const mountRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("initializing...");
@@ -183,7 +217,6 @@ export function Graph3D() {
 
     try {
       const { nodes, links } = buildTopology();
-      const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
       graph = ForceGraph3D()(el)
         .backgroundColor("#060a12")
@@ -191,7 +224,7 @@ export function Graph3D() {
         .height(el.clientHeight)
         .graphData({ nodes, links })
 
-        /* ── Node: orb + glow ring + label ── */
+        /* ── Node rendering ── */
         .nodeThreeObject((node: any) => {
           const grp = new THREE.Group();
           const isCrown = node.id === "brain-opus";
@@ -200,50 +233,46 @@ export function Graph3D() {
             : (KIND_COLOR[node.kind] ?? GROUP_COLOR[node.group] ?? "#88aaff");
           const radius = isCrown ? CROWN_RADIUS : ORB_RADIUS;
 
-          // Sphere
-          const geo = new THREE.SphereGeometry(radius, 24, 24);
-          const mat = new THREE.MeshLambertMaterial({
+          // Sphere with phong for specular highlights
+          const geo = new THREE.SphereGeometry(radius, 32, 32);
+          const mat = new THREE.MeshPhongMaterial({
             color: baseColor, transparent: true, opacity: 0.92,
-            emissive: baseColor, emissiveIntensity: isCrown ? 0.55 : 0.3,
+            emissive: baseColor, emissiveIntensity: isCrown ? 0.5 : 0.25,
+            shininess: 80, specular: new THREE.Color("#444444"),
           });
           grp.add(new THREE.Mesh(geo, mat));
 
-          // Glow ring
-          const ringGeo = new THREE.RingGeometry(radius * 1.3, radius * 1.7, 32);
-          const ringMat = new THREE.MeshBasicMaterial({
-            color: baseColor, transparent: true,
-            opacity: isCrown ? 0.12 : 0.05, side: THREE.DoubleSide,
+          // Inner glow shell (slightly bigger, very transparent)
+          const glowGeo = new THREE.SphereGeometry(radius * 1.25, 24, 24);
+          const glowMat = new THREE.MeshBasicMaterial({
+            color: baseColor, transparent: true, opacity: isCrown ? 0.08 : 0.04,
+            side: THREE.BackSide,
           });
-          const ring = new THREE.Mesh(ringGeo, ringMat);
-          ring.lookAt(0, 0, 1);
-          grp.add(ring);
+          grp.add(new THREE.Mesh(glowGeo, glowMat));
 
-          // Crown outer halo
+          // Crown gets extra outer glow
           if (isCrown) {
-            const hGeo = new THREE.RingGeometry(radius * 1.8, radius * 2.3, 48);
-            const hMat = new THREE.MeshBasicMaterial({
-              color: "#ffd700", transparent: true, opacity: 0.05, side: THREE.DoubleSide,
+            const outerGeo = new THREE.SphereGeometry(radius * 1.6, 24, 24);
+            const outerMat = new THREE.MeshBasicMaterial({
+              color: "#ffd700", transparent: true, opacity: 0.04, side: THREE.BackSide,
             });
-            const h = new THREE.Mesh(hGeo, hMat);
-            h.lookAt(0, 0, 1);
-            grp.add(h);
+            grp.add(new THREE.Mesh(outerGeo, outerMat));
           }
 
           // Label
           const sprite = new SpriteText(node.label, isCrown ? 10 : 7, baseColor);
           sprite.fontWeight = "600";
-          sprite.backgroundColor = "rgba(0,0,0,0.55)";
+          sprite.backgroundColor = "rgba(0,0,0,0.5)";
           sprite.padding = 1.5;
           sprite.borderRadius = 2;
-          (sprite as any).position.set(0, -(radius + 10), 0);
+          (sprite as any).position.set(0, -(radius + 12), 0);
           grp.add(sprite);
 
-          // Store refs
           node.__sphereMat = mat;
           node.__sprite = sprite;
-          node.__ringMat = ringMat;
           node.__radius = radius;
           node.__baseColor = baseColor;
+          node.__glowMat = glowMat;
 
           return grp;
         })
@@ -256,11 +285,11 @@ export function Graph3D() {
           const now = Date.now();
           const active = (s?.__pulse && now - s.__pulse < 1400) ||
                          (t?.__pulse && now - t.__pulse < 1400);
-          if (active) return "#ffffff99";
+          if (active) return "#ffffffaa";
           const tier = Math.min(s?.tier ?? 4, t?.tier ?? 4);
           return TIER_META[tier]
-            ? `${TIER_META[tier].color}25`
-            : "rgba(100,150,240,0.12)";
+            ? `${TIER_META[tier].color}30`
+            : "rgba(100,150,240,0.15)";
         })
         .linkWidth((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
@@ -268,7 +297,7 @@ export function Graph3D() {
           const now = Date.now();
           const active = (s?.__pulse && now - s.__pulse < 1400) ||
                          (t?.__pulse && now - t.__pulse < 1400);
-          return active ? 2.5 : 0.5;
+          return active ? 2.5 : 0.6;
         })
         .linkDirectionalParticles((l: any) => {
           const s: any = typeof l.source === "object" ? l.source : null;
@@ -280,51 +309,82 @@ export function Graph3D() {
         })
         .linkDirectionalParticleWidth(2.0)
         .linkDirectionalParticleSpeed(0.015)
-        .linkDirectionalParticleColor(() => "#ffffffcc")
-        .linkOpacity(0.6)
+        .linkDirectionalParticleColor(() => "#ffffffdd")
+        .linkOpacity(0.7)
 
-        /* ── Physics: minimal — just enough to resolve links ── */
+        /* ── Physics: minimal ── */
         .d3AlphaDecay(0.5)
         .d3VelocityDecay(1)
-        .warmupTicks(10)       // resolve link source/target refs
-        .cooldownTime(200);    // stop quickly after
+        .warmupTicks(10)
+        .cooldownTime(200);
 
-      // Kill movement forces but keep link resolution
       graph.d3Force("charge", null);
       graph.d3Force("center", null);
 
-      // Camera — angled to show 3D depth
-      const hierCenter = { x: 20, y: -20, z: 0 };
-      graph.cameraPosition({ x: 200, y: 180, z: 550 }, hierCenter);
+      // ── Enhanced lighting ──
+      const scene = graph.scene();
+      // Remove default lights, add our own
+      scene.children.filter((c: any) => c.isLight).forEach((l: any) => scene.remove(l));
 
-      // Auto-rotation that PAUSES when user interacts (scroll, drag, click)
-      let angle = Math.atan2(200, 550); // start from initial camera angle
+      // Key light (warm, from above-right)
+      const keyLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+      keyLight.position.set(200, 400, 300);
+      scene.add(keyLight);
+
+      // Fill light (cool, from below-left)
+      const fillLight = new THREE.DirectionalLight(0xaaccff, 0.5);
+      fillLight.position.set(-200, -200, -100);
+      scene.add(fillLight);
+
+      // Ambient (very subtle so orbs glow from emissive)
+      scene.add(new THREE.AmbientLight(0x222233, 0.6));
+
+      // Point light at crown position for golden glow cast
+      const crownLight = new THREE.PointLight(0xffd700, 0.8, 400);
+      crownLight.position.set(0, 220, 0);
+      scene.add(crownLight);
+
+      // ── Subtle star field background ──
+      const starGeo = new THREE.BufferGeometry();
+      const starPositions = new Float32Array(600 * 3);
+      for (let i = 0; i < 600; i++) {
+        starPositions[i * 3]     = (Math.random() - 0.5) * 2000;
+        starPositions[i * 3 + 1] = (Math.random() - 0.5) * 2000;
+        starPositions[i * 3 + 2] = (Math.random() - 0.5) * 2000;
+      }
+      starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.8, transparent: true, opacity: 0.3 });
+      scene.add(new THREE.Points(starGeo, starMat));
+
+      // Camera
+      const hierCenter = { x: 0, y: -20, z: 0 };
+      graph.cameraPosition({ x: 200, y: 180, z: 520 }, hierCenter);
+
+      // Auto-rotation with user interaction pause
+      let angle = Math.atan2(200, 520);
       let userInteracting = false;
       let idleTimer: ReturnType<typeof setTimeout> | null = null;
-      const IDLE_RESUME_MS = 4000; // resume rotation after 4s of no input
 
       const pauseRotation = () => {
         userInteracting = true;
         if (idleTimer) clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           userInteracting = false;
-          // Sync angle to current camera position so rotation continues smoothly
           const pos = graph.cameraPosition();
           angle = Math.atan2(pos.x, pos.z);
-        }, IDLE_RESUME_MS);
+        }, 4000);
       };
 
-      // Listen for user interaction on the canvas
       el.addEventListener("pointerdown", pauseRotation);
       el.addEventListener("wheel", pauseRotation);
 
       const rotateLoop = setInterval(() => {
         if (!graph || userInteracting) return;
         angle += 0.0008;
-        const d = 580;
+        const d = 560;
         graph.cameraPosition({
-          x: d * Math.sin(angle) * 0.8,
-          y: 120 + 80 * Math.sin(angle * 0.4),
+          x: d * Math.sin(angle) * 0.85,
+          y: 130 + 70 * Math.sin(angle * 0.4),
           z: d * Math.cos(angle),
         }, hierCenter);
       }, 50);
@@ -343,10 +403,7 @@ export function Graph3D() {
                 n.id === msg.node_id ||
                 n.label?.toLowerCase().includes((msg.label ?? "").toLowerCase().slice(0, 12))
               );
-              if (tgt) {
-                tgt.__pulse = Date.now();
-                tgt.__pulseColor = tgt.__baseColor ?? "#ffffff";
-              }
+              if (tgt) { tgt.__pulse = Date.now(); tgt.__pulseColor = tgt.__baseColor ?? "#fff"; }
               const crown = gd.nodes.find((n: any) => n.id === "brain-opus");
               if (crown) { crown.__pulse = Date.now(); crown.__pulseColor = "#ffd700"; }
             }
@@ -370,11 +427,10 @@ export function Graph3D() {
 
           n.__sphereMat.color.set(color);
           n.__sphereMat.emissive.set(color);
-          n.__sphereMat.emissiveIntensity = isPulsing ? 0.85 : (n.id === "brain-opus" ? 0.55 : 0.3);
+          n.__sphereMat.emissiveIntensity = isPulsing ? 0.8 : (n.id === "brain-opus" ? 0.5 : 0.25);
           n.__sphereMat.opacity = isPulsing ? 1.0 : 0.92;
-          if (n.__ringMat) {
-            n.__ringMat.color.set(color);
-            n.__ringMat.opacity = isPulsing ? 0.25 : (n.id === "brain-opus" ? 0.12 : 0.05);
+          if (n.__glowMat) {
+            n.__glowMat.opacity = isPulsing ? 0.15 : (n.id === "brain-opus" ? 0.08 : 0.04);
           }
           if (n.__sprite) {
             n.__sprite.color = flash ? "#ffffff" : base;
