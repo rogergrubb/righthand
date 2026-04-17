@@ -38,9 +38,9 @@ const KIND_COLOR: Record<string, string> = {
   orchestrator: "#ffd700",
 };
 const GROUP_COLOR: Record<string, string> = {
-  brain: "#c49fff", voice: "#4aa3ff", memory: "#7dd87d", graph: "#ffb020",
-  schedule: "#ffd166", integrations: "#ff5d8f", database: "#44ddbb",
-  frontend: "#88aaff",
+  brain: "#b388ff", voice: "#40c4ff", memory: "#69f0ae", graph: "#ffab40",
+  schedule: "#ffd740", integrations: "#ff4081", database: "#64ffda",
+  frontend: "#448aff",
 };
 
 const ORB_RADIUS = 8;
@@ -89,42 +89,42 @@ function buildTopology() {
       ["brain-tools",  "Tool Registry", "service", "brain"],
     ], 1, 110, 120, -Math.PI * 0.35, Math.PI * 0.35),
 
-    // ═══ T2: SERVICES — 3 sub-clusters, each arced ═══
-    // Voice (left arc, forward-facing)
+    // ═══ T2: SERVICES — 3 tight group clumps ═══
+    // Voice clump (left, forward) — tight 25° arc
     ...arc([
       ["voice-vad",    "Semantic VAD",    "service", "voice"],
       ["voice-asr",    "Speech Recog",    "service", "voice"],
       ["voice-rt",     "OpenAI Realtime", "api",     "voice"],
       ["voice-bridge", "Voice Bridge",    "service", "voice"],
       ["voice-tts",    "TTS Engine",      "service", "voice"],
-    ], 2, 0, 100, Math.PI * 0.55, Math.PI * 0.95, 12),
+    ], 2, 0, 90, Math.PI * 0.6, Math.PI * 0.85, 15),
 
-    // Schedule (center arc)
+    // Schedule clump (center) — tight 15° arc
     ...arc([
       ["s-cron", "APScheduler",   "service", "schedule"],
       ["s-les",  "Lessons Daily", "task",    "schedule"],
       ["s-tre",  "Trends Daily",  "task",    "schedule"],
-    ], 2, 0, 80, -Math.PI * 0.12, Math.PI * 0.12),
+    ], 2, 0, 70, -Math.PI * 0.08, Math.PI * 0.08),
 
-    // Integrations (right arc, back-facing)
+    // Integrations clump (right, back) — tight 25° arc
     ...arc([
       ["i-gh", "GitHub",  "integration", "integrations"],
       ["i-st", "Stripe",  "integration", "integrations"],
       ["i-gm", "Gmail",   "integration", "integrations"],
       ["i-sl", "Slack",   "integration", "integrations"],
       ["i-li", "Linear",  "integration", "integrations"],
-    ], 2, 0, 100, -Math.PI * 0.95, -Math.PI * 0.55, 12),
+    ], 2, 0, 90, -Math.PI * 0.85, -Math.PI * 0.6, 15),
 
-    // ═══ T3: DATA — Memory arc (left) + DB semicircle (right) ═══
-    // Memory arc
+    // ═══ T3: DATA — Memory clump (left) + DB clump (right) ═══
+    // Memory clump — tight 20° arc
     ...arc([
       ["mem-chunks", "Memory Chunks",   "data",     "memory"],
       ["mem-emb",    "Embeddings",       "service",  "memory"],
       ["mem-pgv",    "pgvector",         "database", "memory"],
       ["mem-recall", "Semantic Recall",  "service",  "memory"],
-    ], 3, -130, 90, Math.PI * 0.4, Math.PI * 0.8),
+    ], 3, -130, 80, Math.PI * 0.5, Math.PI * 0.75),
 
-    // Database semicircle — PostgreSQL at center, tables fanned around it
+    // Database clump — PostgreSQL at center, tables tight around it
     mk("db-pg", "PostgreSQL", "database", "database", 3,  40, -120, -40),
     ...arc([
       ["db-mc",      "memory_chunks",   "table", "database"],
@@ -134,19 +134,23 @@ function buildTopology() {
       ["db-gn",      "graph_nodes",      "table", "database"],
       ["db-ge",      "graph_edges",      "table", "database"],
       ["db-trends",  "trend_reports",    "table", "database"],
-    ], 3, -140, 130, -Math.PI * 0.7, -Math.PI * 0.15, 10),
+    ], 3, -140, 80, -Math.PI * 0.55, -Math.PI * 0.2, 12),
 
-    // ═══ T4: PRESENTATION — wide arc ═══
+    // ═══ T4: PRESENTATION — two group clumps ═══
+    // Graph clump (left)
     ...arc([
       ["g-watch",  "File Watcher",   "service", "graph"],
       ["g3d",      "3D Force Graph", "service", "graph"],
       ["g-scan",   "File Scanner",   "service", "graph"],
       ["g-ws",     "WebSocket Bus",  "service", "graph"],
+    ], 4, -260, 90, Math.PI * 0.45, Math.PI * 0.7, 10),
+    // Frontend clump (right)
+    ...arc([
       ["fe-gui",   "Graph Renderer", "service", "frontend"],
       ["fe-react", "React App",      "service", "frontend"],
       ["fe-vite",  "Vite",           "service", "frontend"],
       ["fe-vui",   "Voice Panel",    "service", "frontend"],
-    ], 4, -260, 160, Math.PI * 0.7, -Math.PI * 0.7, 10),
+    ], 4, -260, 90, -Math.PI * 0.7, -Math.PI * 0.45, 10),
   ];
 
   const links: SysLink[] = [
@@ -230,7 +234,7 @@ export function Graph3D() {
           const isCrown = node.id === "brain-opus";
           const baseColor = isCrown
             ? "#ffd700"
-            : (KIND_COLOR[node.kind] ?? GROUP_COLOR[node.group] ?? "#88aaff");
+            : (GROUP_COLOR[node.group] ?? KIND_COLOR[node.kind] ?? "#88aaff");
           const radius = isCrown ? CROWN_RADIUS : ORB_RADIUS;
 
           // Sphere with phong for specular highlights
