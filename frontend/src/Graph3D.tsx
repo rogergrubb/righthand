@@ -480,27 +480,47 @@ export function Graph3D() {
 
   return (
     <div ref={mountRef} style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* Tier legend */}
+      {/* Group color legend */}
       <div style={{
-        position: "absolute", top: 60, left: 14, padding: "10px 14px",
+        position: "absolute", top: 50, right: 16, padding: "14px 18px",
         zIndex: 999, pointerEvents: "none",
-        background: "rgba(6,10,18,0.75)", borderRadius: 10,
-        backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(6,10,18,0.8)", borderRadius: 12,
+        backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.08)",
+        minWidth: 160,
       }}>
-        {Object.entries(TIER_META).map(([tier, meta]) => (
-          <div key={tier} style={{
-            fontSize: 9, fontWeight: 700, letterSpacing: 2.5,
-            color: meta.color, opacity: 0.8, marginBottom: 10,
-            textTransform: "uppercase", textShadow: `0 0 8px ${meta.color}44`,
-          }}>
-            <span style={{
-              display: "inline-block", width: 14, height: 2,
-              backgroundColor: meta.color, marginRight: 8, verticalAlign: "middle",
-              boxShadow: `0 0 6px ${meta.color}`,
-            }} />
-            T{tier} · {meta.label}
-          </div>
-        ))}
+        <div style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: 3,
+          color: "rgba(255,255,255,0.4)", marginBottom: 12,
+          textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,0.08)",
+          paddingBottom: 8,
+        }}>
+          SYSTEM GROUPS
+        </div>
+        {Object.entries(GROUP_COLOR).map(([group, color]) => {
+          const labels: Record<string, string> = {
+            brain: "AI Brain", voice: "Voice Engine", memory: "Memory / RAG",
+            graph: "3D Graph", schedule: "Scheduled Tasks", integrations: "Integrations",
+            database: "Database", frontend: "Frontend",
+          };
+          return (
+            <div key={group} style={{
+              display: "flex", alignItems: "center", marginBottom: 9,
+            }}>
+              <span style={{
+                display: "inline-block", width: 12, height: 12, borderRadius: "50%",
+                backgroundColor: color, marginRight: 10, flexShrink: 0,
+                boxShadow: `0 0 8px ${color}88, 0 0 3px ${color}`,
+              }} />
+              <span style={{
+                fontSize: 12, fontWeight: 600, letterSpacing: 1.5,
+                color, textTransform: "uppercase",
+                textShadow: `0 0 10px ${color}33`,
+              }}>
+                {labels[group] ?? group}
+              </span>
+            </div>
+          );
+        })}
       </div>
       {/* Title */}
       <div style={{
